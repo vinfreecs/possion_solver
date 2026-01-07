@@ -14,30 +14,42 @@
 #include "parameter.h"
 #include "solver.h"
 
-int main(int argc, char** argv)
-{
-    int rank;
-    Parameter params;
-    Solver solver;
+int main(int argc, char **argv) {
+  int rank;
+  Parameter params;
+  Solver solver;
 
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    initParameter(&params);
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  initParameter(&params);
 
-    if (argc != 2) {
-        printf("Usage: %s <configFile>\n", argv[0]);
-        exit(EXIT_SUCCESS);
-    }
+  if (argc != 2) {
+    printf("Usage: %s <configFile>\n", argv[0]);
+    exit(EXIT_SUCCESS);
+  }
 
-    readParameter(&params, argv[1]);
-    if (rank == 0) {
-        printParameter(&params);
-    }
+  readParameter(&params, argv[1]);
+  if (rank == 0) {
+    printParameter(&params);
+  }
 
-    initSolver(&solver, &params, 2);
-    solve(&solver);
-    getResult(&solver);
+  initSolver(&solver, &params, 2);
 
-    MPI_Finalize();
-    return EXIT_SUCCESS;
+  solve(&solver);
+
+  /*
+
+  for(iter){
+    exchange() //basically exchange the data between ranks so the data con be
+  transfered to gpus cudaMemcpy() // cpy the halo data from cpu to gpu
+    kernal_to_do_stencil_op
+    allreduce -> atomic reduce
+  }
+
+   */
+
+  getResult(&solver);
+
+  MPI_Finalize();
+  return EXIT_SUCCESS;
 }
