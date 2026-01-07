@@ -1,4 +1,4 @@
-# C source skeleton
+# GPU Acceleration through 1D Domain Decomposition of Poisson Solver 
 
 ## Build
 
