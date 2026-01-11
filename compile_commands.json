@@ -1,0 +1,50 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-D_GNU_SOURCE",
+      "-DARRAY_ALIGNMENT=64",
+      "-I/usr/local/include",
+      "-I./src/includes",
+      "-I./CLANG",
+      "-Ofast",
+      "-std=c99",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-icelake/gcc-8.5.0/intel-oneapi-mpi-2021.10.0-ki6gcj4pr5rekayazvm4lsmvcyosce25/mpi/2021.10.0/include",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-icelake/gcc-8.5.0/intel-oneapi-mpi-2021.10.0-ki6gcj4pr5rekayazvm4lsmvcyosce25/mpi/2021.10.0//include",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-icelake/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-axze7ocbc5zpklxb6kr5h2d5hbpf2lxk/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "-o",
+      "CLANG/timing.o",
+      "./src/timing.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/timing.c",
+    "output": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/CLANG/timing.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-D_GNU_SOURCE",
+      "-DARRAY_ALIGNMENT=64",
+      "-I/usr/local/include",
+      "-I./src/includes",
+      "-I./CLANG",
+      "-Ofast",
+      "-std=c99",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-icelake/gcc-8.5.0/intel-oneapi-mpi-2021.10.0-ki6gcj4pr5rekayazvm4lsmvcyosce25/mpi/2021.10.0/include",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-icelake/gcc-8.5.0/intel-oneapi-mpi-2021.10.0-ki6gcj4pr5rekayazvm4lsmvcyosce25/mpi/2021.10.0//include",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-icelake/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-axze7ocbc5zpklxb6kr5h2d5hbpf2lxk/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "-o",
+      "CLANG/main.o",
+      "./src/main.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/main.c",
+    "output": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/CLANG/main.o"
+  }
+]

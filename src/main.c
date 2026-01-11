@@ -4,6 +4,7 @@
  * Use of this source code is governed by a MIT-style
  * license that can be found in the LICENSE file.
  */
+#include "cuda_solver.cuh"
 #include <float.h>
 #include <limits.h>
 #include <mpi.h>
