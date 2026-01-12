@@ -34,6 +34,13 @@ int main(int argc, char **argv) {
     printParameter(&params);
   }
 
+  int num_devices = 0;
+
+  // Gets number of GPU device per node.
+  cudaGetDeviceCount(&num_devices);
+  // Particular MPI rank invoking this selects the GPU for execution
+  cudaSetDevice(rank % num_devices);
+
   initSolver(&solver, &params, 2);
 
   solve(&solver);
