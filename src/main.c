@@ -4,6 +4,7 @@
  * Use of this source code is governed by a MIT-style
  * license that can be found in the LICENSE file.
  */
+#include "cuda_runtime.h"
 #include "cuda_solver.cuh"
 #include <float.h>
 #include <limits.h>
@@ -41,7 +42,18 @@ int main(int argc, char **argv) {
   // Particular MPI rank invoking this selects the GPU for execution
   cudaSetDevice(rank % num_devices);
 
+  // intialising the data on the gpu
   initSolver(&solver, &params, 2);
+  int size_p = (solver.imax + 2) * (solver.jmaxLocal + 2) * sizeof(double);
+  int size_rhs = (solver.imax + 2) * (solver.jmax + 2) * sizeof(double);
+
+  double *p_d;
+  cudaMalloc(p_d, size_p);
+  double *rhs_d;
+  cudaMalloc(rhs_d, size_rhs);
+
+  cudaMemcpy(p_d, solver.p, size_p, cudaMemcpyHostToDevice);
+  cudaMemcpy(rhs_d, solver.rhs, size_rhs, cudaMemcpyHostToDevice);
 
   solve(&solver);
 
