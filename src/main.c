@@ -8,6 +8,7 @@
 #include "cuda_solver.cuh"
 #include <float.h>
 #include <limits.h>
+#include <math.h>
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +16,39 @@
 
 #include "parameter.h"
 #include "solver.h"
+
+void launch_stencil_kernel(double res, double eps, double factor, int imax,
+                           int jmaxLocal, double r, double idx2, double idy2,
+                           double *rhs, double *p, int rank, int size,
+                           int blocksPerGrid, int threadsPerBlock);
+
+static void exchange_cuda(int rank, int size, double *p, int jmaxLocal,
+                          int imax) {
+  MPI_Request requests[4] = {MPI_REQUEST_NULL, MPI_REQUEST_NULL,
+                             MPI_REQUEST_NULL, MPI_REQUEST_NULL};
+
+  /* exchange ghost cells with top neighbor */
+  if (rank + 1 < size) {
+    int top = rank + 1;
+    double *src = p + (jmaxLocal) * (imax + 2) + 1;
+    double *dst = p + (jmaxLocal + 1) * (imax + 2) + 1;
+
+    MPI_Isend(src, imax, MPI_DOUBLE, top, 1, MPI_COMM_WORLD, &requests[0]);
+    MPI_Irecv(dst, imax, MPI_DOUBLE, top, 2, MPI_COMM_WORLD, &requests[1]);
+  }
+
+  /* exchange ghost cells with bottom neighbor */
+  if (rank > 0) {
+    int bottom = rank - 1;
+    double *src = p + (imax + 2) + 1;
+    double *dst = p + 1;
+
+    MPI_Isend(src, imax, MPI_DOUBLE, bottom, 2, MPI_COMM_WORLD, &requests[2]);
+    MPI_Irecv(dst, imax, MPI_DOUBLE, bottom, 1, MPI_COMM_WORLD, &requests[3]);
+  }
+
+  MPI_Waitall(4, requests, MPI_STATUSES_IGNORE);
+}
 
 int main(int argc, char **argv) {
   int rank;
@@ -48,9 +82,9 @@ int main(int argc, char **argv) {
   int size_rhs = (solver.imax + 2) * (solver.jmax + 2) * sizeof(double);
 
   double *p_d;
-  cudaMalloc(p_d, size_p);
+  cudaMalloc((void **)&p_d, size_p);
   double *rhs_d;
-  cudaMalloc(rhs_d, size_rhs);
+  cudaMalloc((void **)&rhs_d, size_rhs);
 
   cudaMemcpy(p_d, solver.p, size_p, cudaMemcpyHostToDevice);
   cudaMemcpy(rhs_d, solver.rhs, size_rhs, cudaMemcpyHostToDevice);
@@ -91,12 +125,10 @@ int main(int argc, char **argv) {
 
   while ((res >= epssq) && (it < itermax)) {
     res = 0.0;
-    exchange_cuda<blocksPerGrid, threadsPerBlock>(rank, size, p_d, jmaxLocal,
-                                                  imax);
-    stencil_cuda<blocksPerGrid, threadsPerBlock>(
-        res, eps, factor, imax, jmaxLocal, r, idx2, idy2, rhs_d, p_d);
-    outer_boundary_cuda<blocksPerGrid, threadsPerBlock>(p_d, rank, size, imax,
-                                                        jmaxLocal);
+    exchange_cuda(rank, size, p_d, jmaxLocal, imax);
+    launch_stencil_kernel(res, eps, factor, imax, jmaxLocal, r, idx2, idy2,
+                          rhs_d, p_d, rank, size, blocksPerGrid,
+                          threadsPerBlock);
     MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     res = res1;
     res = sqrt(res / (imax * jmax));
@@ -110,6 +142,8 @@ int main(int argc, char **argv) {
 
   getResult(&solver);
 
+  cudaFree(p_d);
+  cudaFree(rhs_d);
   MPI_Finalize();
   return EXIT_SUCCESS;
 }

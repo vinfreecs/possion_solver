@@ -1,80 +1,64 @@
-// #include "cuda_solver.cuh"
-// #include <float.h>
-// #include <limits.h>
-// #include <mpi.h>
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <unistd.h>
 
-// #include "parameter.h"
-// #include "solver.h"
 
-// int solve_cuda(Solver *solver) {
-//   double r;
-//   int it = 0;
-//   double res, res1;
+#include "cuda_runtime.h"
+#include "cuda_solver.cuh"
 
-//   int imax = solver->imax;
-//   int jmax = solver->jmax;
-//   int jmaxLocal = solver->jmaxLocal;
-//   double eps = solver->eps;
-//   double omega = solver->omega;
-//   int itermax = solver->itermax;
+__global__ void stencil_cuda(double res, double eps, double factor, int imax,
+                             int jmaxLocal, double r, double idx2, double idy2,
+                             double *rhs, double *p) {
 
-//   double dx2 = solver->dx * solver->dx;
-//   double dy2 = solver->dy * solver->dy;
-//   double idx2 = 1.0 / dx2;
-//   double idy2 = 1.0 / dy2;
-//   double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
-//   double *p = solver->p;
-//   double *rhs = solver->rhs;
-//   double epssq = eps * eps;
+  int j = blockIdx.x * blockDim.x + threadIdx.x;
+  if (j >= jmaxLocal)
+    return;
 
-//   res = eps + 1.0;
+  double epssq = eps * eps;
 
-//   int threadsPerBlock = 64;
-//   int numBlocks = ((jmax + 2) * (imax + 2)) / threadsPerBlock;
+  // for (int j = 1; j < jmaxLocal + 1; j++)
+  for (int i = 1; i < imax + 1; i++) {
 
-//   while ((res >= epssq) && (it < itermax)) {
-//     res = 0.0;
-//     exchange(solver);
+    r = RHS(i, j) - ((P(i - 1, j) - 2.0 * P(i, j) + P(i + 1, j)) * idx2 +
+                     (P(i, j - 1) - 2.0 * P(i, j) + P(i, j + 1)) * idy2);
 
-//     stencil<<<threadsPerBlock, numBlocks>>>();
+    P(i, j) -= (factor * r);
+    // res += (r * r);
+    double temp = r * r;
+    atomicAdd(&res, temp);
+  }
+}
 
-//     if (solver->rank == 0) {
-//       for (int i = 1; i < imax + 1; i++) {
-//         P(i, 0) = P(i, 1);
-//       }
-//     }
+__global__ void outer_boundary_cuda(double *p, int rank, int size, int imax,
+                                    int jmaxLocal) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= imax + 1) {
+    return;
+  }
+  if (rank == 0) {
 
-//     if (solver->rank == (solver->size - 1)) {
-//       for (int i = 1; i < imax + 1; i++) {
-//         P(i, jmaxLocal + 1) = P(i, jmaxLocal);
-//       }
-//     }
+    P(i, 0) = P(i, 1);
+  }
 
-//     for (int j = 1; j < jmaxLocal + 1; j++) {
-//       P(0, j) = P(1, j);
-//       P(imax + 1, j) = P(imax, j);
-//     }
+  if (rank == (size - 1)) {
 
-//     MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-//     res = res1;
-//     res = sqrt(res / (imax * jmax));
-// #ifdef DEBUG
-//     if (solver->rank == 0) {
-//       printf("%d Residuum: %e\n", it, res1);
-//     }
-// #endif
-//     it++;
-//   }
+    P(i, jmaxLocal + 1) = P(i, jmaxLocal);
+  }
 
-//   if (solver->rank == 0) {
-//     printf("Solver took %d iterations\n", it);
-//   }
-//   if (res < eps) {
-//     return 1;
-//   } else {
-//     return 0;
-//   }
-// }
+  P(0, i) = P(1, i);
+  P(imax + 1, i) = P(imax, i);
+}
+
+__global__ void reduce_(int n, double res) {}
+
+extern "C" void launch_stencil_kernel(double res, double eps, double factor,
+                                      int imax, int jmaxLocal, double r,
+                                      double idx2, double idy2, double *rhs,
+                                      double *p, int rank, int size,
+                                      int blocksPerGrid, int threadsPerBlock) {
+
+  // The kernel launch syntax lives HERE, inside the .cu file
+  stencil_cuda<<<blocksPerGrid, threadsPerBlock>>>(
+      res, eps, factor, imax, jmaxLocal, r, idx2, idy2, rhs, p);
+  outer_boundary_cuda<<<blocksPerGrid, threadsPerBlock>>>(p, rank, size, imax,
+                                                          jmaxLocal);
+
+  cudaDeviceSynchronize();
+}
