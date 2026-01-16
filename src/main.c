@@ -122,6 +122,7 @@ int main(int argc, char **argv) {
   double *rhs = solver.rhs;
   double epssq = eps * eps;
   double size = solver.size;
+  res = eps + 1.0;
 
   while ((res >= epssq) && (it < itermax)) {
     res = 0.0;

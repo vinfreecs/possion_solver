@@ -2,7 +2,7 @@
 
 #include "cuda_runtime.h"
 #include "cuda_solver.cuh"
-
+#include <iostream>
 __global__ void stencil_cuda(double res, double eps, double factor, int imax,
                              int jmaxLocal, double r, double idx2, double idy2,
                              double *rhs, double *p) {
@@ -12,6 +12,8 @@ __global__ void stencil_cuda(double res, double eps, double factor, int imax,
     return;
 
   double epssq = eps * eps;
+
+  printf("Entering stencil \n");
 
   // for (int j = 1; j < jmaxLocal + 1; j++)
   for (int i = 1; i < imax + 1; i++) {
@@ -29,6 +31,8 @@ __global__ void stencil_cuda(double res, double eps, double factor, int imax,
 __global__ void outer_boundary_cuda(double *p, int rank, int size, int imax,
                                     int jmaxLocal) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
+  printf("Entering boundary \n");
+
   if (i >= imax + 1) {
     return;
   }
@@ -54,7 +58,6 @@ extern "C" void launch_stencil_kernel(double res, double eps, double factor,
                                       double *p, int rank, int size,
                                       int blocksPerGrid, int threadsPerBlock) {
 
-  // The kernel launch syntax lives HERE, inside the .cu file
   stencil_cuda<<<blocksPerGrid, threadsPerBlock>>>(
       res, eps, factor, imax, jmaxLocal, r, idx2, idy2, rhs, p);
   outer_boundary_cuda<<<blocksPerGrid, threadsPerBlock>>>(p, rank, size, imax,

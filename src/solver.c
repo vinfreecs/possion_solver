@@ -21,33 +21,7 @@ static int sizeOfRank(int rank, int size, int N) {
   return N / size + ((N % size > rank) ? 1 : 0);
 }
 
-static void exchange_cuda(int rank, int size, double *p, int jmaxLocal,
-                          int imax) {
-  MPI_Request requests[4] = {MPI_REQUEST_NULL, MPI_REQUEST_NULL,
-                             MPI_REQUEST_NULL, MPI_REQUEST_NULL};
 
-  /* exchange ghost cells with top neighbor */
-  if (rank + 1 < size) {
-    int top = rank + 1;
-    double *src = p + (jmaxLocal) * (imax + 2) + 1;
-    double *dst = p + (jmaxLocal + 1) * (imax + 2) + 1;
-
-    MPI_Isend(src, imax, MPI_DOUBLE, top, 1, MPI_COMM_WORLD, &requests[0]);
-    MPI_Irecv(dst, imax, MPI_DOUBLE, top, 2, MPI_COMM_WORLD, &requests[1]);
-  }
-
-  /* exchange ghost cells with bottom neighbor */
-  if (rank > 0) {
-    int bottom = rank - 1;
-    double *src = p + (imax + 2) + 1;
-    double *dst = p + 1;
-
-    MPI_Isend(src, imax, MPI_DOUBLE, bottom, 2, MPI_COMM_WORLD, &requests[2]);
-    MPI_Irecv(dst, imax, MPI_DOUBLE, bottom, 1, MPI_COMM_WORLD, &requests[3]);
-  }
-
-  MPI_Waitall(4, requests, MPI_STATUSES_IGNORE);
-}
 static void print(Solver *solver) {
   double *p = solver->p;
   int imax = solver->imax;
