@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
   int blocksPerGrid = (num_devices + threadsPerBlock - 1) / threadsPerBlock;
   // CUDA
 
-  // solve(&solver);
+  solve(&solver);
 
   // CUDA
   double r;
