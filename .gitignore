@@ -2,3 +2,4 @@
 cuda_test/
 check
 *.o
+*.txt

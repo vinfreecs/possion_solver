@@ -4,6 +4,7 @@
  * Use of this source code is governed by a MIT-style
  * license that can be found in the LICENSE file.
  */
+#include "cuda_error.h"
 #include "cuda_runtime.h"
 #include "cuda_solver.cuh"
 #include <float.h>
@@ -16,6 +17,22 @@
 
 #include "parameter.h"
 #include "solver.h"
+
+// void select_gpu(int rank) {
+//   int num_gpus;
+//   checkCudaError(cudaGetDeviceCount(&num_gpus));
+
+//   // Simple Round-Robin:
+//   // Rank 0 gets GPU 0
+//   // Rank 1 gets GPU 1
+//   // Rank 2 gets GPU 0 ...
+//   int device_id = rank % num_gpus;
+
+//   checkCudaError(cudaSetDevice(device_id));
+
+//   printf("Rank %d selected GPU %d out of %d GPUs\n", rank, device_id,
+//   num_gpus);
+// }
 
 void launch_stencil_kernel(double res, double eps, double factor, int imax,
                            int jmaxLocal, double r, double idx2, double idy2,
@@ -71,37 +88,40 @@ int main(int argc, char **argv) {
 
   int num_devices = 0;
 
-  // Gets number of GPU device per node.
-  cudaGetDeviceCount(&num_devices);
+  // CUDA
+  // TODO in host initialzing only once
+  //  Gets number of GPU device per node.
+  checkCudaError(cudaGetDeviceCount(&num_devices));
   // Particular MPI rank invoking this selects the GPU for execution
-  cudaSetDevice(rank % num_devices);
+  int device_id = rank % num_devices;
+  checkCudaError(cudaSetDevice(device_id));
+  printf("Rank %d selected GPU %d out of %d GPUs\n", rank, device_id,
+         num_devices);
+
+  // CUDA
 
   // intialising the data on the gpu
   initSolver(&solver, &params, 2);
+
+  // CUDA
   int size_p = (solver.imax + 2) * (solver.jmaxLocal + 2) * sizeof(double);
   int size_rhs = (solver.imax + 2) * (solver.jmax + 2) * sizeof(double);
 
   double *p_d;
-  cudaMalloc((void **)&p_d, size_p);
+  checkCudaError(cudaMalloc((void **)&p_d, size_p));
   double *rhs_d;
-  cudaMalloc((void **)&rhs_d, size_rhs);
+  checkCudaError(cudaMalloc((void **)&rhs_d, size_rhs));
 
-  cudaMemcpy(p_d, solver.p, size_p, cudaMemcpyHostToDevice);
-  cudaMemcpy(rhs_d, solver.rhs, size_rhs, cudaMemcpyHostToDevice);
+  checkCudaError(cudaMemcpy(p_d, solver.p, size_p, cudaMemcpyHostToDevice));
+  checkCudaError(
+      cudaMemcpy(rhs_d, solver.rhs, size_rhs, cudaMemcpyHostToDevice));
   int threadsPerBlock = 256;
   int blocksPerGrid = (num_devices + threadsPerBlock - 1) / threadsPerBlock;
+  // CUDA
 
-  solve(&solver);
+  // solve(&solver);
 
-  /*
-
-  for(iter){
-    exchange() //basically exchange the data between ranks so the data con be
-  transfered to gpus cudaMemcpy() // cpy the halo data from cpu to gpu
-    kernal_to_do_stencil_op
-    allreduce -> atomic reduce
-  }
-*/
+  // CUDA
   double r;
   int it = 0;
   double res, res1;
@@ -137,14 +157,19 @@ int main(int argc, char **argv) {
   }
 
   if (rank == 0) {
-    cudaMemcpy(solver.p, p_d, size_p, cudaMemcpyDeviceToHost);
-    cudaMemcpy(solver.rhs, rhs_d, size_rhs, cudaMemcpyDeviceToHost);
+    checkCudaError(cudaMemcpy(solver.p, p_d, size_p, cudaMemcpyDeviceToHost));
+    checkCudaError(
+        cudaMemcpy(solver.rhs, rhs_d, size_rhs, cudaMemcpyDeviceToHost));
   }
+  // CUDA
 
   getResult(&solver);
 
-  cudaFree(p_d);
-  cudaFree(rhs_d);
+  // CUDA
+  // cudaFree(p_d);
+  // cudaFree(rhs_d);
+  // CUDA
+
   MPI_Finalize();
   return EXIT_SUCCESS;
 }
