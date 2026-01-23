@@ -14,7 +14,7 @@ Q         ?= @
 
 #DO NOT EDIT BELOW
 include $(MAKE_DIR)/config.mk
-include $(MAKE_DIR)/include_$(TAG).mk
+include $(MAKE_DIR)/make/include_$(TAG).mk
 INCLUDES  += -I$(SRC_DIR)/includes -I$(BUILD_DIR)
 
 VPATH     = $(SRC_DIR)

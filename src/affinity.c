@@ -17,8 +17,7 @@
 #define MAX_NUM_THREADS 128
 #define gettid() syscall(SYS_gettid)
 
-static int getProcessorID(cpu_set_t* cpu_set)
-{
+static int getProcessorID(cpu_set_t* cpu_set) {
     int processorId;
 
     for ( processorId = 0; processorId < MAX_NUM_THREADS; processorId++ )
@@ -31,8 +30,7 @@ static int getProcessorID(cpu_set_t* cpu_set)
     return processorId;
 }
 
-int affinity_getProcessorId()
-{
+int affinity_getProcessorId() {
     cpu_set_t  cpu_set;
     CPU_ZERO(&cpu_set);
     sched_getaffinity(gettid(),sizeof(cpu_set_t), &cpu_set);
@@ -40,8 +38,7 @@ int affinity_getProcessorId()
     return getProcessorID(&cpu_set);
 }
 
-void affinity_pinThread(int processorId)
-{
+void affinity_pinThread(int processorId) {
     cpu_set_t cpuset;
     pthread_t thread;
 
@@ -51,8 +48,7 @@ void affinity_pinThread(int processorId)
     pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 }
 
-void affinity_pinProcess(int processorId)
-{
+void affinity_pinProcess(int processorId) {
     cpu_set_t cpuset;
 
     CPU_ZERO(&cpuset);

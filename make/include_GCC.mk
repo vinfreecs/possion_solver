@@ -1,13 +1,13 @@
-CC   = mpiicc
+CC   = gcc
 GCC  = gcc
 LINKER = $(CC)
 
 ifeq ($(ENABLE_OPENMP),true)
-OPENMP   = -qopenmp
+OPENMP   = -fopenmp
 endif
 
 VERSION  = --version
-CFLAGS   =  -O3 -xHost -qopt-zmm-usage=high -std=c99 $(OPENMP)
+CFLAGS   = -Ofast -ffreestanding -std=c99 $(OPENMP)
 LFLAGS   = $(OPENMP)
 DEFINES  = -D_GNU_SOURCE
 INCLUDES =

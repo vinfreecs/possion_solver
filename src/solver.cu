@@ -123,29 +123,35 @@ void initSolver(Solver* solver, Parameter* params, int problem) {
     int imax      = solver->imax;
     int jmax      = solver->jmax;
     int jmaxLocal = solver->jmaxLocal;
-    solver->p     = allocate(64, (imax + 2) * (jmaxLocal + 2) * sizeof(double));
-    solver->rhs   = allocate(64, (imax + 2) * (jmax + 2) * sizeof(double));
 
+    cudaMallocHost(&solver->p , (imax + 2) * (jmaxLocal + 2) * sizeof(double));
+    cudaMallocHost(&solver->rhs, (imax + 2) * (jmax + 2) * sizeof(double));
+
+    cudaMalloc(&solver->d_p , (imax + 2) * (jmaxLocal + 2) * sizeof(double));
+    cudaMalloc(&solver->d_rhs , (imax + 2) * (jmax + 2) * sizeof(double));
+
+    cudaMemcpy(solver->d_p, solver->p, (imax + 2) * (jmaxLocal + 2) * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(solver->d_rhs, solver->rhs, (imax + 2) * (jmax + 2) * sizeof(double), cudaMemcpyHostToDevice);
     double dx   = solver->dx;
     double dy   = solver->dy;
     double* p   = solver->p;
     double* rhs = solver->rhs;
 
-    for (int j = 0; j < jmaxLocal + 2; j++) {
+    for (int j = 0; j < jmaxLocal + 2; j++) { // Can be done in GPU? Initialize Pressure field to (sin(4piπx) + sin(4piπy))
         double y = solver->ys + j * dy;
         for (int i = 0; i < imax + 2; i++) {
             P(i, j) = sin(4.0 * PI * i * dx) + sin(4.0 * PI * y);
         }
     }
 
-    if (problem == 2) {
-        for (int j = 0; j < jmax + 2; j++) {
+    if (problem == 2) {// Offload to CUDA Kernel
+        for (int j = 0; j < jmax + 2; j++) { // Can be done in GPU? Initialize RHS to sin(2piπx)
             for (int i = 0; i < imax + 2; i++) {
                 RHS(i, j) = sin(2.0 * PI * i * dx);
             }
         }
     } else {
-        for (int j = 0; j < jmax + 2; j++) {
+        for (int j = 0; j < jmax + 2; j++) { // Can be done in GPU directly? Initialize RHS to 0
             for (int i = 0; i < imax + 2; i++) {
                 RHS(i, j) = 0.0;
             }
@@ -185,6 +191,55 @@ void debug(Solver* solver) {
         MPI_Barrier(MPI_COMM_WORLD);
     }
 }
+__global__
+void res_kernel(Solver* solver, double factor, double* res) {
+    int imax = solver->imax;
+    int jmaxLocal = solver->imaxLocal;
+    double* p = solver->p;
+
+    for (int j = 1; j < jmaxLocal + 1; j++) {
+        for (int i = 1; i < imax + 1; i++) {
+
+            r = RHS(i, j) - ((P(i - 1, j) - 2.0 * P(i, j) + P(i + 1, j)) * idx2 +
+                                (P(i, j - 1) - 2.0 * P(i, j) + P(i, j + 1)) * idy2);
+
+            P(i, j) -= (factor * r);
+            *res += (r * r);
+        }
+    }
+    
+}
+
+__global__
+void copyHorizantal(double* p, int imax, int jmaxLocal) {
+    // impelementation of horizantal boundaries
+    for (int j = 1; j < jmaxLocal + 1; j++) {
+            P(0, j)        = P(1, j);
+            P(imax + 1, j) = P(imax, j);
+    }
+}
+
+__global__
+void copyVertical(solver* solver) {
+    int imax = solver->imax;
+    int jmaxLocal = solver->jmaxLocal;
+    double* p = solver->p;
+    int rank = solver->rank;
+    int size = solver->size;
+
+    // impelementation of vertical boundaries
+    if (solver->rank == 0) {
+            for (int i = 1; i < imax + 1; i++) {
+                P(i, 0) = P(i, 1);
+            }
+        }
+
+    if (solver->rank == (solver->size - 1)) {
+        for (int i = 1; i < imax + 1; i++) {
+            P(i, jmaxLocal + 1) = P(i, jmaxLocal);
+        }
+    }
+}
 
 int solve(Solver* solver) {
     double r;
@@ -213,34 +268,38 @@ int solve(Solver* solver) {
         res = 0.0;
         exchange(solver);
 
-        for (int j = 1; j < jmaxLocal + 1; j++) { 
-            for (int i = 1; i < imax + 1; i++) {
+        // for (int j = 1; j < jmaxLocal + 1; j++) {
+        //     for (int i = 1; i < imax + 1; i++) {
 
-                r = RHS(i, j) - ((P(i - 1, j) - 2.0 * P(i, j) + P(i + 1, j)) * idx2 +
-                                    (P(i, j - 1) - 2.0 * P(i, j) + P(i, j + 1)) * idy2);
+        //         r = RHS(i, j) - ((P(i - 1, j) - 2.0 * P(i, j) + P(i + 1, j)) * idx2 +
+        //                             (P(i, j - 1) - 2.0 * P(i, j) + P(i, j + 1)) * idy2);
 
-                P(i, j) -= (factor * r);
-                res += (r * r);
-            }
-        }
+        //         P(i, j) -= (factor * r);
+        //         res += (r * r);
+        //     }
+        // }
+        res_kernel<<<imax/256, 256>>>(solver, factor, res);
+        cudaDeviceSynchronize();
 
-        if (solver->rank == 0) {  // Offload to CUDA Kernel
-            for (int i = 1; i < imax + 1; i++) {
-                P(i, 0) = P(i, 1);
-            }
-        }
+        // if (solver->rank != 0) {
+        //     for (int i = 1; i < imax + 1; i++) {
+        //         P(i, 0) = P(i, 1);                
+        //     }
+        // }
 
-        if (solver->rank == (solver->size - 1)) { // Offload to CUDA Kernel
-            for (int i = 1; i < imax + 1; i++) {
-                P(i, jmaxLocal + 1) = P(i, jmaxLocal);
-            }
-        }
+        // if (solver->rank != (solver->size - 1)) {
+        //     for (int i = 1; i < imax + 1; i++) {
+        //         P(i, jmaxLocal + 1) = P(i, jmaxLocal);
+        //     }
+        // }
 
-        for (int j = 1; j < jmaxLocal + 1; j++) { // Offload to CUDA Kernel
-            P(0, j)        = P(1, j);
-            P(imax + 1, j) = P(imax, j);
-        }
-
+        // for (int j = 1; j < jmaxLocal + 1; j++) {
+        //     P(0, j)        = P(1, j);
+        //     P(imax + 1, j) = P(imax, j);
+        // }
+        copyVertical<<<res/256, 256>>>(solver);
+        copyHorizantal<<<res/256, 256>>>(p, imax, jmaxLocal);
+        cudaDeviceSynchronize();
         MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         res = res1;
         res = sqrt(res / (imax * jmax));
@@ -290,34 +349,35 @@ int solveRB(Solver* solver) {
         res = 0.0;
         jsw = 1;
 
-        for (pass = 0; pass < 2; pass++) {
-            isw = jsw;
-            exchange(solver);
+        // for (pass = 0; pass < 2; pass++) {
+        //     isw = jsw;
+        //     exchange(solver);
 
-            for (int j = 1; j < jmaxLocal + 1; j++) {
-                for (int i = isw; i < imax + 1; i += 2) {
+        //     for (int j = 1; j < jmaxLocal + 1; j++) {
+        //         for (int i = isw; i < imax + 1; i += 2) {
 
-                    double r = RHS(i, j) -
-                               ((P(i + 1, j) - 2.0 * P(i, j) + P(i - 1, j)) * idx2 +
-                                   (P(i, j + 1) - 2.0 * P(i, j) + P(i, j - 1)) * idy2);
+        //             double r = RHS(i, j) -
+        //                        ((P(i + 1, j) - 2.0 * P(i, j) + P(i - 1, j)) * idx2 +
+        //                            (P(i, j + 1) - 2.0 * P(i, j) + P(i, j - 1)) * idy2);
 
-                    P(i, j) -= (factor * r);
-                    res += (r * r);
-                }
-                isw = 3 - isw;
-            }
-            jsw = 3 - jsw;
-        }
+        //             P(i, j) -= (factor * r);
+        //             res += (r * r);
+        //         }
+        //         isw = 3 - isw;
+        //     }
+        //     jsw = 3 - jsw;
+        // }
 
-        for (int i = 1; i < imax + 1; i++) {
-            P(i, 0)             = P(i, 1);
-            P(i, jmaxLocal + 1) = P(i, jmaxLocal);
-        }
+        // for (int i = 1; i < imax + 1; i++) {
+        //     P(i, 0)             = P(i, 1);
+        //     P(i, jmaxLocal + 1) = P(i, jmaxLocal);
+        // }
 
-        for (int j = 1; j < jmaxLocal + 1; j++) {
-            P(0, j)        = P(1, j);
-            P(imax + 1, j) = P(imax, j);
-        }
+        // for (int j = 1; j < jmaxLocal + 1; j++) {
+        //     P(0, j)        = P(1, j);
+        //     P(imax + 1, j) = P(imax, j);
+        // }
+        res_kernel<<<
         MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         res = res1;
         res = res / (double)(imax * jmax);
@@ -337,78 +397,78 @@ int solveRB(Solver* solver) {
     }
 }
 
-// int solveRBA(Solver* solver) {
-//     double r;
-//     int it = 0;
-//     double res;
+int solveRBA(Solver* solver) {
+    double r;
+    int it = 0;
+    double res;
 
-//     int imax      = solver->imax;
-//     int jmax      = solver->jmax;
-//     int jmaxLocal = solver->jmaxLocal;
-//     double eps    = solver->eps;
-//     double omega  = solver->omega;
-//     int itermax   = solver->itermax;
+    int imax      = solver->imax;
+    int jmax      = solver->jmax;
+    int jmaxLocal = solver->jmaxLocal;
+    double eps    = solver->eps;
+    double omega  = solver->omega;
+    int itermax   = solver->itermax;
 
-//     double dx2    = solver->dx * solver->dx;
-//     double dy2    = solver->dy * solver->dy;
-//     double idx2   = 1.0 / dx2;
-//     double idy2   = 1.0 / dy2;
-//     double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
-//     double* p     = solver->p;
-//     double* rhs   = solver->rhs;
-//     int pass, jsw, isw;
-//     // double rho   = solver->rho;
-//     double epssq = eps * eps;
+    double dx2    = solver->dx * solver->dx;
+    double dy2    = solver->dy * solver->dy;
+    double idx2   = 1.0 / dx2;
+    double idy2   = 1.0 / dy2;
+    double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
+    double* p     = solver->p;
+    double* rhs   = solver->rhs;
+    int pass, jsw, isw;
+    double rho   = solver->rho;
+    double epssq = eps * eps;
 
-//     res = eps + 1.0;
+    res = eps + 1.0;
 
-//     while ((res >= epssq) && (it < itermax)) {
-//         res = 0.0;
-//         jsw = 1;
+    while ((res >= epssq) && (it < itermax)) {
+        res = 0.0;
+        jsw = 1;
 
-//         for (pass = 0; pass < 2; pass++) {
-//             isw = jsw;
-//             exchange(solver);
+        for (pass = 0; pass < 2; pass++) {
+            isw = jsw;
+            exchange(solver);
 
-//             for (int j = 1; j < jmaxLocal + 1; j++) {
-//                 for (int i = isw; i < imax + 1; i += 2) {
+            for (int j = 1; j < jmaxLocal + 1; j++) { // Offload to Kernel
+                for (int i = isw; i < imax + 1; i += 2) {
 
-//                     double r = RHS(i, j) -
-//                                ((P(i + 1, j) - 2.0 * P(i, j) + P(i - 1, j)) * idx2 +
-//                                    (P(i, j + 1) - 2.0 * P(i, j) + P(i, j - 1)) * idy2);
+                    double r = RHS(i, j) -
+                               ((P(i + 1, j) - 2.0 * P(i, j) + P(i - 1, j)) * idx2 +
+                                   (P(i, j + 1) - 2.0 * P(i, j) + P(i, j - 1)) * idy2);
 
-//                     P(i, j) -= (omega * factor * r);
-//                     res += (r * r);
-//                 }
-//                 isw = 3 - isw;
-//             }
-//             jsw   = 3 - jsw;
-//             omega = (it == 0 && pass == 0 ? 1.0 / (1.0 - 0.5 * rho * rho)
-//                                           : 1.0 / (1.0 - 0.25 * rho * rho * omega));
-//         }
+                    P(i, j) -= (omega * factor * r);
+                    res += (r * r);
+                }
+                isw = 3 - isw;
+            }
+            jsw   = 3 - jsw;
+            omega = (it == 0 && pass == 0 ? 1.0 / (1.0 - 0.5 * rho * rho)
+                                          : 1.0 / (1.0 - 0.25 * rho * rho * omega));
+        }
 
-//         for (int i = 1; i < imax + 1; i++) {
-//             P(i, 0)             = P(i, 1);
-//             P(i, jmaxLocal + 1) = P(i, jmaxLocal);
-//         }
+        for (int i = 1; i < imax + 1; i++) {
+            P(i, 0)             = P(i, 1);
+            P(i, jmaxLocal + 1) = P(i, jmaxLocal);
+        }
 
-//         for (int j = 1; j < jmaxLocal + 1; j++) {
-//             P(0, j)        = P(1, j);
-//             P(imax + 1, j) = P(imax, j);
-//         }
+        for (int j = 1; j < jmaxLocal + 1; j++) {
+            P(0, j)        = P(1, j);
+            P(imax + 1, j) = P(imax, j);
+        }
 
-//         res = res / (double)(imax * jmax);
-// #ifdef DEBUG
-//         printf("%d Residuum: %e Omega: %e\n", it, res, omega);
-// #endif
-//         it++;
-//     }
+        res = res / (double)(imax * jmax);
+#ifdef DEBUG
+        printf("%d Residuum: %e Omega: %e\n", it, res, omega);
+#endif
+        it++;
+    }
 
-//     printf("Final omega: %f\n", omega);
-//     printf("Solver took %d iterations to reach %f\n", it, sqrt(res));
-// }
+    printf("Final omega: %f\n", omega);
+    printf("Solver took %d iterations to reach %f\n", it, sqrt(res));
+}
 
-void writeResult(Solver* solver, double* m, char* filename) { 
+void writeResult(Solver* solver, double* m, char* filename) {
     int imax  = solver->imax;
     int jmax  = solver->jmax;
     double* p = solver->p;

@@ -46,3 +46,7 @@ to clean intermediate build results and binary.
 make asm
 ```
 The assembler files will also be located in the `<TOOLCHAIN>` directory.
+
+Tasks:
+1. Update Kernels for Computation.
+2. Allocate Memory using cudaMalloc
