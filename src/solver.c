@@ -13,430 +13,423 @@
 #include "parameter.h"
 #include "solver.h"
 
-#define PI        3.14159265358979323846
-#define P(i, j)   p[(j) * (imax + 2) + (i)]
+#define PI 3.14159265358979323846
+#define P(i, j) p[(j) * (imax + 2) + (i)]
 #define RHS(i, j) rhs[(j) * (imax + 2) + (i)]
 
-static int sizeOfRank(int rank, int size, int N)
-{
-    return N / size + ((N % size > rank) ? 1 : 0);
+static int sizeOfRank(int rank, int size, int N) {
+  return N / size + ((N % size > rank) ? 1 : 0);
 }
 
-static void print(Solver* solver)
-{
-    double* p = solver->p;
-    int imax  = solver->imax;
 
-    printf("### RANK %d #######################################################\n",
-        solver->rank);
-    for (int j = 0; j < solver->jmaxLocal + 2; j++) {
-        printf("%02d: ", j);
-        for (int i = 0; i < solver->imax + 2; i++) {
-            printf("%12.8f  ", P(i, j));
-        }
-        printf("\n");
+static void print(Solver *solver) {
+  double *p = solver->p;
+  int imax = solver->imax;
+
+  printf(
+      "### RANK %d #######################################################\n",
+      solver->rank);
+  for (int j = 0; j < solver->jmaxLocal + 2; j++) {
+    printf("%02d: ", j);
+    for (int i = 0; i < solver->imax + 2; i++) {
+      printf("%12.8f  ", P(i, j));
     }
-    fflush(stdout);
+    printf("\n");
+  }
+  fflush(stdout);
 }
 
-static void exchange(Solver* solver)
-{
-    MPI_Request requests[4] = { MPI_REQUEST_NULL,
-        MPI_REQUEST_NULL,
-        MPI_REQUEST_NULL,
-        MPI_REQUEST_NULL };
+static void exchange(Solver *solver) {
+  MPI_Request requests[4] = {MPI_REQUEST_NULL, MPI_REQUEST_NULL,
+                             MPI_REQUEST_NULL, MPI_REQUEST_NULL};
 
-    /* exchange ghost cells with top neighbor */
-    if (solver->rank + 1 < solver->size) {
-        int top     = solver->rank + 1;
-        double* src = solver->p + (solver->jmaxLocal) * (solver->imax + 2) + 1;
-        double* dst = solver->p + (solver->jmaxLocal + 1) * (solver->imax + 2) + 1;
+  /* exchange ghost cells with top neighbor */
+  if (solver->rank + 1 < solver->size) {
+    int top = solver->rank + 1;
+    double *src = solver->p + (solver->jmaxLocal) * (solver->imax + 2) + 1;
+    double *dst = solver->p + (solver->jmaxLocal + 1) * (solver->imax + 2) + 1;
 
-        MPI_Isend(src, solver->imax, MPI_DOUBLE, top, 1, MPI_COMM_WORLD, &requests[0]);
-        MPI_Irecv(dst, solver->imax, MPI_DOUBLE, top, 2, MPI_COMM_WORLD, &requests[1]);
-    }
+    MPI_Isend(src, solver->imax, MPI_DOUBLE, top, 1, MPI_COMM_WORLD,
+              &requests[0]);
+    MPI_Irecv(dst, solver->imax, MPI_DOUBLE, top, 2, MPI_COMM_WORLD,
+              &requests[1]);
+  }
 
-    /* exchange ghost cells with bottom neighbor */
-    if (solver->rank > 0) {
-        int bottom  = solver->rank - 1;
-        double* src = solver->p + (solver->imax + 2) + 1;
-        double* dst = solver->p + 1;
+  /* exchange ghost cells with bottom neighbor */
+  if (solver->rank > 0) {
+    int bottom = solver->rank - 1;
+    double *src = solver->p + (solver->imax + 2) + 1;
+    double *dst = solver->p + 1;
 
-        MPI_Isend(src, solver->imax, MPI_DOUBLE, bottom, 2, MPI_COMM_WORLD, &requests[2]);
-        MPI_Irecv(dst, solver->imax, MPI_DOUBLE, bottom, 1, MPI_COMM_WORLD, &requests[3]);
-    }
+    MPI_Isend(src, solver->imax, MPI_DOUBLE, bottom, 2, MPI_COMM_WORLD,
+              &requests[2]);
+    MPI_Irecv(dst, solver->imax, MPI_DOUBLE, bottom, 1, MPI_COMM_WORLD,
+              &requests[3]);
+  }
 
-    MPI_Waitall(4, requests, MPI_STATUSES_IGNORE);
+  MPI_Waitall(4, requests, MPI_STATUSES_IGNORE);
 }
 
-void getResult(Solver* solver)
-{
-    double* Pall = NULL;
-    int *rcvCounts, *displs;
+void getResult(Solver *solver) {
+  double *Pall = NULL;
+  int *rcvCounts, *displs;
 
-    if (solver->rank == 0) {
-        Pall = allocate(64, (solver->imax + 2) * (solver->jmax + 2) * sizeof(double));
-        rcvCounts    = (int*)malloc(solver->size * sizeof(int));
-        displs       = (int*)malloc(solver->size * sizeof(int));
-        rcvCounts[0] = solver->jmaxLocal * (solver->imax + 2);
-        displs[0]    = 0;
-        int cursor   = rcvCounts[0];
+  if (solver->rank == 0) {
+    Pall =
+        allocate(64, (solver->imax + 2) * (solver->jmax + 2) * sizeof(double));
+    rcvCounts = (int *)malloc(solver->size * sizeof(int));
+    displs = (int *)malloc(solver->size * sizeof(int));
+    rcvCounts[0] = solver->jmaxLocal * (solver->imax + 2);
+    displs[0] = 0;
+    int cursor = rcvCounts[0];
 
-        for (int i = 1; i < solver->size; i++) {
-            rcvCounts[i] = sizeOfRank(i, solver->size, solver->jmax) * (solver->imax + 2);
-            displs[i]    = cursor;
-            cursor += rcvCounts[i];
-        }
+    for (int i = 1; i < solver->size; i++) {
+      rcvCounts[i] =
+          sizeOfRank(i, solver->size, solver->jmax) * (solver->imax + 2);
+      displs[i] = cursor;
+      cursor += rcvCounts[i];
     }
+  }
 
-    int cnt            = solver->jmaxLocal * (solver->imax + 2);
-    double* sendbuffer = solver->p + (solver->imax + 2);
-    MPI_Gatherv(sendbuffer,
-        cnt,
-        MPI_DOUBLE,
-        Pall,
-        rcvCounts,
-        displs,
-        MPI_DOUBLE,
-        0,
-        MPI_COMM_WORLD);
+  int cnt = solver->jmaxLocal * (solver->imax + 2);
+  double *sendbuffer = solver->p + (solver->imax + 2);
+  MPI_Gatherv(sendbuffer, cnt, MPI_DOUBLE, Pall, rcvCounts, displs, MPI_DOUBLE,
+              0, MPI_COMM_WORLD);
 
-    if (solver->rank == 0) {
-        writeResult(solver, Pall, "p.dat");
-    }
+  if (solver->rank == 0) {
+    writeResult(solver, Pall, "p.dat");
+  }
 }
 
-void initSolver(Solver* solver, Parameter* params, int problem)
-{
-    MPI_Comm_rank(MPI_COMM_WORLD, &(solver->rank));
-    MPI_Comm_size(MPI_COMM_WORLD, &(solver->size));
-    solver->imax      = params->imax;
-    solver->jmax      = params->jmax;
-    solver->jmaxLocal = sizeOfRank(solver->rank, solver->size, solver->jmax);
-    printf("RANK %d: imaxLocal : %d, jmaxLocal : %d\n",
-        solver->rank,
-        solver->imax,
-        solver->jmaxLocal);
+void initSolver(Solver *solver, Parameter *params, int problem) {
+  MPI_Comm_rank(MPI_COMM_WORLD, &(solver->rank));
+  MPI_Comm_size(MPI_COMM_WORLD, &(solver->size));
+  solver->imax = params->imax;
+  solver->jmax = params->jmax;
+  solver->jmaxLocal = sizeOfRank(solver->rank, solver->size, solver->jmax);
+  printf("RANK %d: imaxLocal : %d, jmaxLocal : %d\n", solver->rank,
+         solver->imax, solver->jmaxLocal);
 
-    solver->dx      = params->xlength / params->imax;
-    solver->dy      = params->ylength / params->jmax;
-    solver->ys      = solver->rank * solver->jmaxLocal * solver->dy;
-    solver->eps     = params->eps;
-    solver->omega   = params->omg;
-    solver->itermax = params->itermax;
+  solver->dx = params->xlength / params->imax;
+  solver->dy = params->ylength / params->jmax;
+  solver->ys = solver->rank * solver->jmaxLocal * solver->dy;
+  solver->eps = params->eps;
+  solver->omega = params->omg;
+  solver->itermax = params->itermax;
 
-    int imax      = solver->imax;
-    int jmax      = solver->jmax;
-    int jmaxLocal = solver->jmaxLocal;
-    solver->p     = allocate(64, (imax + 2) * (jmaxLocal + 2) * sizeof(double));
-    solver->rhs   = allocate(64, (imax + 2) * (jmax + 2) * sizeof(double));
+  int imax = solver->imax;
+  int jmax = solver->jmax;
+  int jmaxLocal = solver->jmaxLocal;
+  solver->p = allocate(64, (imax + 2) * (jmaxLocal + 2) * sizeof(double));
+  solver->rhs = allocate(64, (imax + 2) * (jmax + 2) * sizeof(double));
 
-    double dx   = solver->dx;
-    double dy   = solver->dy;
-    double* p   = solver->p;
-    double* rhs = solver->rhs;
+  double dx = solver->dx;
+  double dy = solver->dy;
+  double *p = solver->p;
+  double *rhs = solver->rhs;
 
-    for (int j = 0; j < jmaxLocal + 2; j++) {
-        double y = solver->ys + j * dy;
-        for (int i = 0; i < imax + 2; i++) {
-            P(i, j) = sin(4.0 * PI * i * dx) + sin(4.0 * PI * y);
-        }
+  for (int j = 0; j < jmaxLocal + 2; j++) {
+    double y = solver->ys + j * dy;
+    for (int i = 0; i < imax + 2; i++) {
+      P(i, j) = sin(4.0 * PI * i * dx) + sin(4.0 * PI * y);
     }
+  }
 
-    if (problem == 2) {
-        for (int j = 0; j < jmax + 2; j++) {
-            for (int i = 0; i < imax + 2; i++) {
-                RHS(i, j) = sin(2.0 * PI * i * dx);
-            }
-        }
-    } else {
-        for (int j = 0; j < jmax + 2; j++) {
-            for (int i = 0; i < imax + 2; i++) {
-                RHS(i, j) = 0.0;
-            }
-        }
-    }
-}
-
-void debug(Solver* solver)
-{
-    int imax  = solver->imax;
-    int rank  = solver->rank;
-    double* p = solver->p;
-
-    /*     for( int j=0; j < solver->jmaxLocal+2; j++ ) { */
-    /*         for( int i=0; i < solver->imax+2; i++ ) { */
-    /*             P(i, j) = (double) rank; */
-    /*         } */
-    /*     } */
-
-    /*     for ( int i=0; i < solver->size; i++) { */
-    /*         if ( i == rank ) { */
-    /*            print(solver); */
-    /*         } */
-    /*         MPI_Barrier(MPI_COMM_WORLD); */
-    /*     } */
-
-    /*     if ( rank == 0 ) { */
-    /*         printf("##########################################################\n"); */
-    /*         printf("##  Exchange ghost layers\n"); */
-    /*         printf("##########################################################\n"); */
-    /*     } */
-    /*     exchange(solver); */
-
-    for (int i = 0; i < solver->size; i++) {
-        if (i == rank) {
-            print(solver);
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
-    }
-}
-
-int solve(Solver* solver)
-{
-    double r;
-    int it = 0;
-    double res, res1;
-
-    int imax      = solver->imax;
-    int jmax      = solver->jmax;
-    int jmaxLocal = solver->jmaxLocal;
-    double eps    = solver->eps;
-    double omega  = solver->omega;
-    int itermax   = solver->itermax;
-
-    double dx2    = solver->dx * solver->dx;
-    double dy2    = solver->dy * solver->dy;
-    double idx2   = 1.0 / dx2;
-    double idy2   = 1.0 / dy2;
-    double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
-    double* p     = solver->p;
-    double* rhs   = solver->rhs;
-    double epssq  = eps * eps;
-
-    res = eps + 1.0;
-
-    while ((res >= epssq) && (it < itermax)) {
-        res = 0.0;
-        exchange(solver);
-
-        for (int j = 1; j < jmaxLocal + 1; j++) {
-            for (int i = 1; i < imax + 1; i++) {
-
-                r = RHS(i, j) - ((P(i - 1, j) - 2.0 * P(i, j) + P(i + 1, j)) * idx2 +
-                                    (P(i, j - 1) - 2.0 * P(i, j) + P(i, j + 1)) * idy2);
-
-                P(i, j) -= (factor * r);
-                res += (r * r);
-            }
-        }
-
-        if (solver->rank == 0) {
-            for (int i = 1; i < imax + 1; i++) {
-                P(i, 0) = P(i, 1);
-            }
-        }
-
-        if (solver->rank == (solver->size - 1)) {
-            for (int i = 1; i < imax + 1; i++) {
-                P(i, jmaxLocal + 1) = P(i, jmaxLocal);
-            }
-        }
-
-        for (int j = 1; j < jmaxLocal + 1; j++) {
-            P(0, j)        = P(1, j);
-            P(imax + 1, j) = P(imax, j);
-        }
-
-        MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        res = res1;
-        res = sqrt(res / (imax * jmax));
-#ifdef DEBUG
-        if (solver->rank == 0) {
-            printf("%d Residuum: %e\n", it, res1);
-        }
-#endif
-        it++;
-    }
-
-    if (solver->rank == 0) {
-        printf("Solver took %d iterations\n", it);
-    }
-    if (res < eps) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-int solveRB(Solver* solver)
-{
-    double r;
-    int it = 0;
-    double res, res1;
-
-    int imax      = solver->imax;
-    int jmax      = solver->jmax;
-    int jmaxLocal = solver->jmaxLocal;
-    double eps    = solver->eps;
-    double omega  = solver->omega;
-    int itermax   = solver->itermax;
-
-    double dx2    = solver->dx * solver->dx;
-    double dy2    = solver->dy * solver->dy;
-    double idx2   = 1.0 / dx2;
-    double idy2   = 1.0 / dy2;
-    double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
-    double* p     = solver->p;
-    double* rhs   = solver->rhs;
-    int pass, jsw, isw;
-    double epssq = eps * eps;
-
-    res = eps + 1.0;
-
-    while ((res >= epssq) && (it < itermax)) {
-        res = 0.0;
-        jsw = 1;
-
-        for (pass = 0; pass < 2; pass++) {
-            isw = jsw;
-            exchange(solver);
-
-            for (int j = 1; j < jmaxLocal + 1; j++) {
-                for (int i = isw; i < imax + 1; i += 2) {
-
-                    double r = RHS(i, j) -
-                               ((P(i + 1, j) - 2.0 * P(i, j) + P(i - 1, j)) * idx2 +
-                                   (P(i, j + 1) - 2.0 * P(i, j) + P(i, j - 1)) * idy2);
-
-                    P(i, j) -= (factor * r);
-                    res += (r * r);
-                }
-                isw = 3 - isw;
-            }
-            jsw = 3 - jsw;
-        }
-
-        for (int i = 1; i < imax + 1; i++) {
-            P(i, 0)             = P(i, 1);
-            P(i, jmaxLocal + 1) = P(i, jmaxLocal);
-        }
-
-        for (int j = 1; j < jmaxLocal + 1; j++) {
-            P(0, j)        = P(1, j);
-            P(imax + 1, j) = P(imax, j);
-        }
-        MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        res = res1;
-        res = res / (double)(imax * jmax);
-#ifdef DEBUG
-        printf("%d Residuum: %e\n", it, res);
-#endif
-        it++;
-    }
-
-    if (solver->rank == 0) {
-        printf("Solver took %d iterations\n", it);
-    }
-    if (res < eps) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-int solveRBA(Solver* solver)
-{
-    double r;
-    int it = 0;
-    double res;
-
-    int imax      = solver->imax;
-    int jmax      = solver->jmax;
-    int jmaxLocal = solver->jmaxLocal;
-    double eps    = solver->eps;
-    double omega  = solver->omega;
-    int itermax   = solver->itermax;
-
-    double dx2    = solver->dx * solver->dx;
-    double dy2    = solver->dy * solver->dy;
-    double idx2   = 1.0 / dx2;
-    double idy2   = 1.0 / dy2;
-    double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
-    double* p     = solver->p;
-    double* rhs   = solver->rhs;
-    int pass, jsw, isw;
-    double rho   = solver->rho;
-    double epssq = eps * eps;
-
-    res = eps + 1.0;
-
-    while ((res >= epssq) && (it < itermax)) {
-        res = 0.0;
-        jsw = 1;
-
-        for (pass = 0; pass < 2; pass++) {
-            isw = jsw;
-            exchange(solver);
-
-            for (int j = 1; j < jmaxLocal + 1; j++) {
-                for (int i = isw; i < imax + 1; i += 2) {
-
-                    double r = RHS(i, j) -
-                               ((P(i + 1, j) - 2.0 * P(i, j) + P(i - 1, j)) * idx2 +
-                                   (P(i, j + 1) - 2.0 * P(i, j) + P(i, j - 1)) * idy2);
-
-                    P(i, j) -= (omega * factor * r);
-                    res += (r * r);
-                }
-                isw = 3 - isw;
-            }
-            jsw   = 3 - jsw;
-            omega = (it == 0 && pass == 0 ? 1.0 / (1.0 - 0.5 * rho * rho)
-                                          : 1.0 / (1.0 - 0.25 * rho * rho * omega));
-        }
-
-        for (int i = 1; i < imax + 1; i++) {
-            P(i, 0)             = P(i, 1);
-            P(i, jmaxLocal + 1) = P(i, jmaxLocal);
-        }
-
-        for (int j = 1; j < jmaxLocal + 1; j++) {
-            P(0, j)        = P(1, j);
-            P(imax + 1, j) = P(imax, j);
-        }
-
-        res = res / (double)(imax * jmax);
-#ifdef DEBUG
-        printf("%d Residuum: %e Omega: %e\n", it, res, omega);
-#endif
-        it++;
-    }
-
-    printf("Final omega: %f\n", omega);
-    printf("Solver took %d iterations to reach %f\n", it, sqrt(res));
-}
-
-void writeResult(Solver* solver, double* m, char* filename)
-{
-    int imax  = solver->imax;
-    int jmax  = solver->jmax;
-    double* p = solver->p;
-
-    FILE* fp;
-    fp = fopen(filename, "w");
-
-    if (fp == NULL) {
-        printf("Error!\n");
-        exit(EXIT_FAILURE);
-    }
-
+  if (problem == 2) {
     for (int j = 0; j < jmax + 2; j++) {
-        for (int i = 0; i < imax + 2; i++) {
-            fprintf(fp, "%f ", m[j * (imax + 2) + i]);
-        }
-        fprintf(fp, "\n");
+      for (int i = 0; i < imax + 2; i++) {
+        RHS(i, j) = sin(2.0 * PI * i * dx);
+      }
+    }
+  } else {
+    for (int j = 0; j < jmax + 2; j++) {
+      for (int i = 0; i < imax + 2; i++) {
+        RHS(i, j) = 0.0;
+      }
+    }
+  }
+}
+
+void debug(Solver *solver) {
+  int imax = solver->imax;
+  int rank = solver->rank;
+  double *p = solver->p;
+
+  /*     for( int j=0; j < solver->jmaxLocal+2; j++ ) { */
+  /*         for( int i=0; i < solver->imax+2; i++ ) { */
+  /*             P(i, j) = (double) rank; */
+  /*         } */
+  /*     } */
+
+  /*     for ( int i=0; i < solver->size; i++) { */
+  /*         if ( i == rank ) { */
+  /*            print(solver); */
+  /*         } */
+  /*         MPI_Barrier(MPI_COMM_WORLD); */
+  /*     } */
+
+  /*     if ( rank == 0 ) { */
+  /*         printf("##########################################################\n");
+   */
+  /*         printf("##  Exchange ghost layers\n"); */
+  /*         printf("##########################################################\n");
+   */
+  /*     } */
+  /*     exchange(solver); */
+
+  for (int i = 0; i < solver->size; i++) {
+    if (i == rank) {
+      print(solver);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+  }
+}
+
+int solve(Solver *solver) {
+  double r;
+  int it = 0;
+  double res, res1;
+
+  int imax = solver->imax;
+  int jmax = solver->jmax;
+  int jmaxLocal = solver->jmaxLocal;
+  double eps = solver->eps;
+  double omega = solver->omega;
+  int itermax = solver->itermax;
+
+  double dx2 = solver->dx * solver->dx;
+  double dy2 = solver->dy * solver->dy;
+  double idx2 = 1.0 / dx2;
+  double idy2 = 1.0 / dy2;
+  double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
+  double *p = solver->p;
+  double *rhs = solver->rhs;
+  double epssq = eps * eps;
+
+  res = eps + 1.0;
+
+  while ((res >= epssq) && (it < itermax)) {
+    res = 0.0;
+    exchange(solver);
+
+    for (int j = 1; j < jmaxLocal + 1; j++) {
+      for (int i = 1; i < imax + 1; i++) {
+
+        r = RHS(i, j) - ((P(i - 1, j) - 2.0 * P(i, j) + P(i + 1, j)) * idx2 +
+                         (P(i, j - 1) - 2.0 * P(i, j) + P(i, j + 1)) * idy2);
+
+        P(i, j) -= (factor * r);
+        res += (r * r);
+      }
     }
 
-    fclose(fp);
+    if (solver->rank == 0) {
+      for (int i = 1; i < imax + 1; i++) {
+        P(i, 0) = P(i, 1);
+      }
+    }
+
+    if (solver->rank == (solver->size - 1)) {
+      for (int i = 1; i < imax + 1; i++) {
+        P(i, jmaxLocal + 1) = P(i, jmaxLocal);
+      }
+    }
+
+    for (int j = 1; j < jmaxLocal + 1; j++) {
+      P(0, j) = P(1, j);
+      P(imax + 1, j) = P(imax, j);
+    }
+
+    MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    res = res1;
+    res = sqrt(res / (imax * jmax));
+#ifdef DEBUG
+    if (solver->rank == 0) {
+      printf("%d Residuum: %e\n", it, res1);
+    }
+#endif
+    it++;
+  }
+
+  if (solver->rank == 0) {
+    printf("Solver took %d iterations\n", it);
+  }
+  if (res < eps) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+int solveRB(Solver *solver) {
+  double r;
+  int it = 0;
+  double res, res1;
+
+  int imax = solver->imax;
+  int jmax = solver->jmax;
+  int jmaxLocal = solver->jmaxLocal;
+  double eps = solver->eps;
+  double omega = solver->omega;
+  int itermax = solver->itermax;
+
+  double dx2 = solver->dx * solver->dx;
+  double dy2 = solver->dy * solver->dy;
+  double idx2 = 1.0 / dx2;
+  double idy2 = 1.0 / dy2;
+  double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
+  double *p = solver->p;
+  double *rhs = solver->rhs;
+  int pass, jsw, isw;
+  double epssq = eps * eps;
+
+  res = eps + 1.0;
+
+  while ((res >= epssq) && (it < itermax)) {
+    res = 0.0;
+    jsw = 1;
+
+    for (pass = 0; pass < 2; pass++) {
+      isw = jsw;
+      exchange(solver);
+
+      for (int j = 1; j < jmaxLocal + 1; j++) {
+        for (int i = isw; i < imax + 1; i += 2) {
+
+          double r =
+              RHS(i, j) - ((P(i + 1, j) - 2.0 * P(i, j) + P(i - 1, j)) * idx2 +
+                           (P(i, j + 1) - 2.0 * P(i, j) + P(i, j - 1)) * idy2);
+
+          P(i, j) -= (factor * r);
+          res += (r * r);
+        }
+        isw = 3 - isw;
+      }
+      jsw = 3 - jsw;
+    }
+
+    for (int i = 1; i < imax + 1; i++) {
+      P(i, 0) = P(i, 1);
+      P(i, jmaxLocal + 1) = P(i, jmaxLocal);
+    }
+
+    for (int j = 1; j < jmaxLocal + 1; j++) {
+      P(0, j) = P(1, j);
+      P(imax + 1, j) = P(imax, j);
+    }
+    MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    res = res1;
+    res = res / (double)(imax * jmax);
+#ifdef DEBUG
+    printf("%d Residuum: %e\n", it, res);
+#endif
+    it++;
+  }
+
+  if (solver->rank == 0) {
+    printf("Solver took %d iterations\n", it);
+  }
+  if (res < eps) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+// int solveRBA(Solver* solver)
+// {
+//     double r;
+//     int it = 0;
+//     double res;
+
+//     int imax      = solver->imax;
+//     int jmax      = solver->jmax;
+//     int jmaxLocal = solver->jmaxLocal;
+//     double eps    = solver->eps;
+//     double omega  = solver->omega;
+//     int itermax   = solver->itermax;
+
+//     double dx2    = solver->dx * solver->dx;
+//     double dy2    = solver->dy * solver->dy;
+//     double idx2   = 1.0 / dx2;
+//     double idy2   = 1.0 / dy2;
+//     double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
+//     double* p     = solver->p;
+//     double* rhs   = solver->rhs;
+//     int pass, jsw, isw;
+//     double rho   = solver->rho;
+//     double epssq = eps * eps;
+
+//     res = eps + 1.0;
+
+//     while ((res >= epssq) && (it < itermax)) {
+//         res = 0.0;
+//         jsw = 1;
+
+//         for (pass = 0; pass < 2; pass++) {
+//             isw = jsw;
+//             exchange(solver);
+
+//             for (int j = 1; j < jmaxLocal + 1; j++) {
+//                 for (int i = isw; i < imax + 1; i += 2) {
+
+//                     double r = RHS(i, j) -
+//                                ((P(i + 1, j) - 2.0 * P(i, j) + P(i - 1, j)) *
+//                                idx2 +
+//                                    (P(i, j + 1) - 2.0 * P(i, j) + P(i, j -
+//                                    1)) * idy2);
+
+//                     P(i, j) -= (omega * factor * r);
+//                     res += (r * r);
+//                 }
+//                 isw = 3 - isw;
+//             }
+//             jsw   = 3 - jsw;
+//             omega = (it == 0 && pass == 0 ? 1.0 / (1.0 - 0.5 * rho * rho)
+//                                           : 1.0 / (1.0 - 0.25 * rho * rho *
+//                                           omega));
+//         }
+
+//         for (int i = 1; i < imax + 1; i++) {
+//             P(i, 0)             = P(i, 1);
+//             P(i, jmaxLocal + 1) = P(i, jmaxLocal);
+//         }
+
+//         for (int j = 1; j < jmaxLocal + 1; j++) {
+//             P(0, j)        = P(1, j);
+//             P(imax + 1, j) = P(imax, j);
+//         }
+
+//         res = res / (double)(imax * jmax);
+// #ifdef DEBUG
+//         printf("%d Residuum: %e Omega: %e\n", it, res, omega);
+// #endif
+//         it++;
+//     }
+
+//     printf("Final omega: %f\n", omega);
+//     printf("Solver took %d iterations to reach %f\n", it, sqrt(res));
+// }
+
+void writeResult(Solver *solver, double *m, char *filename) {
+  int imax = solver->imax;
+  int jmax = solver->jmax;
+  double *p = solver->p;
+
+  FILE *fp;
+  fp = fopen(filename, "w");
+
+  if (fp == NULL) {
+    printf("Error!\n");
+    exit(EXIT_FAILURE);
+  }
+
+  for (int j = 0; j < jmax + 2; j++) {
+    for (int i = 0; i < imax + 2; i++) {
+      fprintf(fp, "%f ", m[j * (imax + 2) + i]);
+    }
+    fprintf(fp, "\n");
+  }
+
+  fclose(fp);
 }

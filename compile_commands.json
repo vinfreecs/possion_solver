@@ -1,0 +1,274 @@
+[
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/nvcc",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-c",
+      "main.o",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "src/main.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/main.c"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/gcc-14.2.0-zwtu3vdazjyrpjt3t65elyxemtloofmt/bin/gcc",
+      "-D__CUDA_ARCH_LIST__=520",
+      "-D__NV_LEGACY_LAUNCH",
+      "-c",
+      "-x",
+      "c",
+      "-D__NVCC__",
+      "-Wno-psabi",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/../targets/x86_64-linux/include",
+      "-D__CUDACC_VER_MAJOR__=12",
+      "-D__CUDACC_VER_MINOR__=9",
+      "-D__CUDACC_VER_BUILD__=41",
+      "-D__CUDA_API_VER_MAJOR__=12",
+      "-D__CUDA_API_VER_MINOR__=9",
+      "-D__NVCC_DIAG_PRAGMA_SUPPORT__=1",
+      "-D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1",
+      "-m64",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "-o",
+      "main.o",
+      "src/main.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/main.c",
+    "output": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/main.o"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/nvcc",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-c",
+      "cuda_solver.o",
+      "-arch=sm_86",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "src/cuda_solver.cu"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/cuda_solver.cu"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/nvcc",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-c",
+      "parameter.o",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "src/parameter.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/parameter.c"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/gcc-14.2.0-zwtu3vdazjyrpjt3t65elyxemtloofmt/bin/gcc",
+      "-D__CUDA_ARCH_LIST__=520",
+      "-D__NV_LEGACY_LAUNCH",
+      "-c",
+      "-x",
+      "c",
+      "-D__NVCC__",
+      "-Wno-psabi",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/../targets/x86_64-linux/include",
+      "-D__CUDACC_VER_MAJOR__=12",
+      "-D__CUDACC_VER_MINOR__=9",
+      "-D__CUDACC_VER_BUILD__=41",
+      "-D__CUDA_API_VER_MAJOR__=12",
+      "-D__CUDA_API_VER_MINOR__=9",
+      "-D__NVCC_DIAG_PRAGMA_SUPPORT__=1",
+      "-D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1",
+      "-m64",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "-o",
+      "parameter.o",
+      "src/parameter.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/parameter.c",
+    "output": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/parameter.o"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/nvcc",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-c",
+      "allocate.o",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "src/allocate.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/allocate.c"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/gcc-14.2.0-zwtu3vdazjyrpjt3t65elyxemtloofmt/bin/gcc",
+      "-D__CUDA_ARCH_LIST__=520",
+      "-D__NV_LEGACY_LAUNCH",
+      "-c",
+      "-x",
+      "c",
+      "-D__NVCC__",
+      "-Wno-psabi",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/../targets/x86_64-linux/include",
+      "-D__CUDACC_VER_MAJOR__=12",
+      "-D__CUDACC_VER_MINOR__=9",
+      "-D__CUDACC_VER_BUILD__=41",
+      "-D__CUDA_API_VER_MAJOR__=12",
+      "-D__CUDA_API_VER_MINOR__=9",
+      "-D__NVCC_DIAG_PRAGMA_SUPPORT__=1",
+      "-D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1",
+      "-m64",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "-o",
+      "allocate.o",
+      "src/allocate.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/allocate.c",
+    "output": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/allocate.o"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/nvcc",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-c",
+      "affinity.o",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "src/affinity.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/affinity.c"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/gcc-14.2.0-zwtu3vdazjyrpjt3t65elyxemtloofmt/bin/gcc",
+      "-D__CUDA_ARCH_LIST__=520",
+      "-D__NV_LEGACY_LAUNCH",
+      "-c",
+      "-x",
+      "c",
+      "-D__NVCC__",
+      "-Wno-psabi",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/../targets/x86_64-linux/include",
+      "-D__CUDACC_VER_MAJOR__=12",
+      "-D__CUDACC_VER_MINOR__=9",
+      "-D__CUDACC_VER_BUILD__=41",
+      "-D__CUDA_API_VER_MAJOR__=12",
+      "-D__CUDA_API_VER_MINOR__=9",
+      "-D__NVCC_DIAG_PRAGMA_SUPPORT__=1",
+      "-D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1",
+      "-m64",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "-o",
+      "affinity.o",
+      "src/affinity.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/affinity.c",
+    "output": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/affinity.o"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/nvcc",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-c",
+      "timing.o",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "src/timing.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/timing.c"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/gcc-14.2.0-zwtu3vdazjyrpjt3t65elyxemtloofmt/bin/gcc",
+      "-D__CUDA_ARCH_LIST__=520",
+      "-D__NV_LEGACY_LAUNCH",
+      "-c",
+      "-x",
+      "c",
+      "-D__NVCC__",
+      "-Wno-psabi",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/../targets/x86_64-linux/include",
+      "-D__CUDACC_VER_MAJOR__=12",
+      "-D__CUDACC_VER_MINOR__=9",
+      "-D__CUDACC_VER_BUILD__=41",
+      "-D__CUDA_API_VER_MAJOR__=12",
+      "-D__CUDA_API_VER_MINOR__=9",
+      "-D__NVCC_DIAG_PRAGMA_SUPPORT__=1",
+      "-D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1",
+      "-m64",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "-o",
+      "timing.o",
+      "src/timing.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/timing.c",
+    "output": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/timing.o"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/nvcc",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-c",
+      "solver.o",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "src/solver.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/solver.c"
+  },
+  {
+    "arguments": [
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/gcc-14.2.0-zwtu3vdazjyrpjt3t65elyxemtloofmt/bin/gcc",
+      "-D__CUDA_ARCH_LIST__=520",
+      "-D__NV_LEGACY_LAUNCH",
+      "-c",
+      "-x",
+      "c",
+      "-D__NVCC__",
+      "-Wno-psabi",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-14.2.0/openmpi-5.0.5-6emtlk3wpfh7xgmcslo7p5fkl3g2nibx/include",
+      "-I/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/cuda-12.9.0-thcn547375nmyodcs5y4b7tuf6rz454p/bin/../targets/x86_64-linux/include",
+      "-D__CUDACC_VER_MAJOR__=12",
+      "-D__CUDACC_VER_MINOR__=9",
+      "-D__CUDACC_VER_BUILD__=41",
+      "-D__CUDA_API_VER_MAJOR__=12",
+      "-D__CUDA_API_VER_MINOR__=9",
+      "-D__NVCC_DIAG_PRAGMA_SUPPORT__=1",
+      "-D__CUDACC_DEVICE_ATOMIC_BUILTINS__=1",
+      "-m64",
+      "-I",
+      "/apps/SPACK/0.19.1/opt/linux-almalinux8-zen/gcc-8.5.0/intel-oneapi-compilers-2023.2.1-k2ouvx57td2pheext4yb2lp2klm33dyq/compiler/2023.2.1/linux/lib/oclfpga/include",
+      "-o",
+      "solver.o",
+      "src/solver.c"
+    ],
+    "directory": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver",
+    "file": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/src/solver.c",
+    "output": "/home/hpc/pavl/pavl166v/pampi_project/cudaPoissonSolver/solver.o"
+  }
+]
