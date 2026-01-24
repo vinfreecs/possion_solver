@@ -1,12 +1,11 @@
 CC   = mpicc
-GCC  = cc
 NVCC = nvcc
-LINKER = $(CC)
 
-ifeq ($(ENABLE_OPENMP),true)
-OPENMP   = -fopenmp
+# ifeq ($(ENABLE_OPENMP),true)
+# OPENMP   = -fopenmp
 #OPENMP   = -Xpreprocessor -fopenmp #required on Macos with homebrew libomp
-LIBS     = # -lomp
+# LIBS     = # -lomp 
+LIBS = -lcudart
 endif
 
 VERSION  = --version
