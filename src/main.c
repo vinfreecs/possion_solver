@@ -18,23 +18,7 @@
 #include "parameter.h"
 #include "solver.h"
 
-// void select_gpu(int rank) {
-//   int num_gpus;
-//   checkCudaError(cudaGetDeviceCount(&num_gpus));
-
-//   // Simple Round-Robin:
-//   // Rank 0 gets GPU 0
-//   // Rank 1 gets GPU 1
-//   // Rank 2 gets GPU 0 ...
-//   int device_id = rank % num_gpus;
-
-//   checkCudaError(cudaSetDevice(device_id));
-
-//   printf("Rank %d selected GPU %d out of %d GPUs\n", rank, device_id,
-//   num_gpus);
-// }
-
-void launch_stencil_kernel(double res, double eps, double factor, int imax,
+void launch_stencil_kernel(double *res, double eps, double factor, int imax,
                            int jmaxLocal, double r, double idx2, double idy2,
                            double *rhs, double *p, int rank, int size,
                            int blocksPerGrid, int threadsPerBlock);
@@ -116,7 +100,10 @@ int main(int argc, char **argv) {
   checkCudaError(
       cudaMemcpy(rhs_d, solver.rhs, size_rhs, cudaMemcpyHostToDevice));
   int threadsPerBlock = 256;
-  int blocksPerGrid = (num_devices + threadsPerBlock - 1) / threadsPerBlock;
+  // TODO
+  //  int blocksPerGrid = (num_devices + threadsPerBlock - 1) / threadsPerBlock;
+  int blocksPerGrid =
+      (solver.jmaxLocal + threadsPerBlock - 1) / threadsPerBlock;
   // CUDA
 
   solve(&solver);
@@ -147,7 +134,7 @@ int main(int argc, char **argv) {
   while ((res >= epssq) && (it < itermax)) {
     res = 0.0;
     exchange_cuda(rank, size, p_d, jmaxLocal, imax);
-    launch_stencil_kernel(res, eps, factor, imax, jmaxLocal, r, idx2, idy2,
+    launch_stencil_kernel(&res, eps, factor, imax, jmaxLocal, r, idx2, idy2,
                           rhs_d, p_d, rank, size, blocksPerGrid,
                           threadsPerBlock);
     MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -156,18 +143,17 @@ int main(int argc, char **argv) {
     it++;
   }
 
-  if (rank == 0) {
-    checkCudaError(cudaMemcpy(solver.p, p_d, size_p, cudaMemcpyDeviceToHost));
-    checkCudaError(
-        cudaMemcpy(solver.rhs, rhs_d, size_rhs, cudaMemcpyDeviceToHost));
-  }
+  checkCudaError(cudaMemcpy(solver.p, p_d, size_p, cudaMemcpyDeviceToHost));
+  checkCudaError(
+      cudaMemcpy(solver.rhs, rhs_d, size_rhs, cudaMemcpyDeviceToHost));
+
   // CUDA
 
   getResult(&solver);
 
   // CUDA
-  // cudaFree(p_d);
-  // cudaFree(rhs_d);
+  cudaFree(p_d);
+  cudaFree(rhs_d);
   // CUDA
 
   MPI_Finalize();

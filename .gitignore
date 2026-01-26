@@ -4,3 +4,4 @@ check
 *.o
 *.txt
 debug/
+module_load.sh
