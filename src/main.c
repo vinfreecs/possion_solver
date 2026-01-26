@@ -17,11 +17,13 @@
 
 #include "parameter.h"
 #include "solver.h"
+#include "timing.h"
 
-void launch_stencil_kernel(double *res, double eps, double factor, int imax,
-                           int jmaxLocal, double r, double idx2, double idy2,
-                           double *rhs, double *p, int rank, int size,
-                           int blocksPerGrid, int threadsPerBlock);
+void launch_stencil_kernel(double *d_res, double *res, double eps,
+                           double factor, int imax, int jmaxLocal, double r,
+                           double idx2, double idy2, double *rhs, double *p,
+                           int rank, int size, int blocksPerGrid,
+                           int threadsPerBlock);
 
 static void exchange_cuda(int rank, int size, double *p, int jmaxLocal,
                           int imax) {
@@ -106,9 +108,11 @@ int main(int argc, char **argv) {
       (solver.jmaxLocal + threadsPerBlock - 1) / threadsPerBlock;
   // CUDA
 
-  solve(&solver);
+  // solve(&solver);
 
   // CUDA
+  double *d_res;
+  checkCudaError(cudaMalloc((void **)&d_res, sizeof(double)));
   double r;
   int it = 0;
   double res, res1;
@@ -131,17 +135,22 @@ int main(int argc, char **argv) {
   double size = solver.size;
   res = eps + 1.0;
 
+  double start_time = getTimeStamp();
   while ((res >= epssq) && (it < itermax)) {
+    checkCudaError(cudaMemset(d_res, 0, sizeof(double)));
     res = 0.0;
     exchange_cuda(rank, size, p_d, jmaxLocal, imax);
-    launch_stencil_kernel(&res, eps, factor, imax, jmaxLocal, r, idx2, idy2,
-                          rhs_d, p_d, rank, size, blocksPerGrid,
+    launch_stencil_kernel(d_res, &res, eps, factor, imax, jmaxLocal, r, idx2,
+                          idy2, rhs_d, p_d, rank, size, blocksPerGrid,
                           threadsPerBlock);
+    // if (it % 100 == 0) {
+    // }
     MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     res = res1;
     res = sqrt(res / (imax * jmax));
     it++;
   }
+  double stop_time = getTimeStamp();
 
   checkCudaError(cudaMemcpy(solver.p, p_d, size_p, cudaMemcpyDeviceToHost));
   checkCudaError(
@@ -151,11 +160,17 @@ int main(int argc, char **argv) {
 
   getResult(&solver);
 
+  double time_taken = stop_time - start_time;
+  printf("Solver took %d iterations\n", it);
+  printf("Time taken is %f \n", time_taken);
+  double perf = (double)it * (double)imax * (double)jmax / (time_taken * 1e6);
+  printf("The performance %f in MLUP/s \n", perf);
+
   // CUDA
   cudaFree(p_d);
   cudaFree(rhs_d);
+  checkCudaError(cudaFree(d_res));
   // CUDA
-
   MPI_Finalize();
   return EXIT_SUCCESS;
 }

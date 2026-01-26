@@ -19,7 +19,7 @@ __global__ void stencil_cuda(double *d_res, double eps, double factor, int imax,
 
   double epssq = eps * eps;
 
-  printf("Entering stencil \n");
+  // printf("Entering stencil \n");
   double temp = 0;
 
   // for (int j = 1; j < jmaxLocal + 1; j++)
@@ -44,13 +44,13 @@ __global__ void outer_boundary_cuda(double *p, int rank, int size, int imax,
     return;
   }
   if (rank == 0) {
-    printf("Entering boundary \n");
+    // printf("Entering boundary \n");
 
     P(i, 0) = P(i, 1);
   }
 
   if (rank == (size - 1)) {
-    printf("Entering boundary \n");
+    // printf("Entering boundary \n");
 
     P(i, jmaxLocal + 1) = P(i, jmaxLocal);
   }
@@ -61,35 +61,31 @@ __global__ void outer_boundary_cuda(double *p, int rank, int size, int imax,
 
 // __global__ void reduce_(int n, double res) {}
 
-extern "C" void launch_stencil_kernel(double *h_res, double eps, double factor,
-                                      int imax, int jmaxLocal, double r,
-                                      double idx2, double idy2, double *rhs,
-                                      double *p, int rank, int size,
-                                      int blocksPerGrid, int threadsPerBlock) {
+extern "C" void launch_stencil_kernel(double *d_res, double *h_res, double eps,
+                                      double factor, int imax, int jmaxLocal,
+                                      double r, double idx2, double idy2,
+                                      double *rhs, double *p, int rank,
+                                      int size, int blocksPerGrid,
+                                      int threadsPerBlock) {
 
   // as exchanche is not cuda kernal how to know for sure the the exchange has
   // happeded before starting the next iteration
-  printf("start stencil From Host\n");
-  double *d_res;
-  checkCudaError(cudaMalloc((void **)&d_res, sizeof(double)));
-  checkCudaError(cudaMemset(d_res, 0, sizeof(double)));
+  // printf("start stencil From Host\n");
 
   stencil_cuda<<<blocksPerGrid, threadsPerBlock>>>(
       d_res, eps, factor, imax, jmaxLocal, r, idx2, idy2, rhs, p);
   checkCudaError(cudaGetLastError());
   checkCudaError(cudaDeviceSynchronize());
-  printf("end stencil From Host\n");
-  printf("start boundary From Host\n");
+  // printf("end stencil From Host\n");
+  // printf("start boundary From Host\n");
 
   checkCudaError(
       cudaMemcpy(h_res, d_res, sizeof(double), cudaMemcpyDeviceToHost));
-
-  checkCudaError(cudaFree(d_res));
 
   int boundary_blocks = (imax + 2 + threadsPerBlock - 1) / threadsPerBlock;
   outer_boundary_cuda<<<boundary_blocks, threadsPerBlock>>>(p, rank, size, imax,
                                                             jmaxLocal);
   checkCudaError(cudaGetLastError());
   checkCudaError(cudaDeviceSynchronize());
-  printf("end Boundary From Host\n");
+  // printf("end Boundary From Host\n");
 }
