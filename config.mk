@@ -1,6 +1,7 @@
 # Supported: GCC, CLANG, ICC, NVCC
-TAG ?= ICX
+TAG ?= NVCC
 ENABLE_OPENMP ?= false
+ENABLE_MPI ?= true
 
 #Feature options
 OPTIONS +=  -DARRAY_ALIGNMENT=64

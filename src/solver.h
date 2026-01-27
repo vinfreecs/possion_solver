@@ -17,6 +17,7 @@ typedef struct {
     int size;
 
     double *p, *rhs;
+    double *d_p, *d_rhs;
     double eps, omega;
     int itermax;
 } Solver;
@@ -26,4 +27,6 @@ extern void initSolver(Solver*, Parameter*, int problem);
 extern void getResult(Solver*);
 extern void writeResult(Solver*, double*, char*);
 extern int solve(Solver*);
+extern void res_kernel(Solver* solver, double factor, double* res);
+extern void initialize(Solver* solver, int problem);
 #endif

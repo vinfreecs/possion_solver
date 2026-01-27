@@ -32,8 +32,8 @@ int main(int argc, char** argv) {
     if (rank == 0) printParameter(&params);
 
     initSolver(&solver, &params, 2);
-    solve(&solver);
-    getResult(&solver);
+    // solve(&solver);
+    // getResult(&solver);
 
     MPI_Finalize();
     return EXIT_SUCCESS; 
