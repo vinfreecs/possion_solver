@@ -180,11 +180,13 @@ int main(int argc, char **argv) {
 
   // getResult(&solver);
 
-  double time_taken = stop_time - start_time;
-  printf("Solver took %d iterations\n", it);
-  printf("Time taken is %f \n", time_taken);
-  double perf = (double)it * (double)imax * (double)jmax / (time_taken * 1e6);
-  printf("The performance %f in MLUP/s \n", perf);
+  if (rank == 0) {
+    double time_taken = stop_time - start_time;
+    printf("Solver took %d iterations\n", it);
+    printf("Time taken is %f \n", time_taken);
+    double perf = (double)it * (double)imax * (double)jmax / (time_taken * 1e6);
+    printf("The performance %f in MLUP/s \n", perf);
+  }
 
   // CUDA
   cudaFree(p_d);

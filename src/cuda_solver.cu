@@ -44,18 +44,19 @@ __global__ void outer_boundary_cuda(double *p_new, int rank, int size, int imax,
   if (i > imax + 1) {
     return;
   }
-  if (rank == 0) {
 
+  if (rank == 0 && i <= imax + 1) {
     P_N(i, 0) = P_N(i, 1);
   }
 
-  if (rank == (size - 1)) {
-
+  if (rank == (size - 1) && i <= imax + 1) {
     P_N(i, jmaxLocal + 1) = P_N(i, jmaxLocal);
   }
 
-  P_N(0, i) = P_N(1, i);
-  P_N(imax + 1, i) = P_N(imax, i);
+  if (i <= jmaxLocal + 1) {
+    P_N(0, i) = P_N(1, i);
+    P_N(imax + 1, i) = P_N(imax, i);
+  }
 }
 
 extern "C" void launch_stencil_kernel(double *d_res, double *h_res, double eps,
