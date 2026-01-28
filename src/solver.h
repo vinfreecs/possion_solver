@@ -23,10 +23,11 @@ typedef struct {
 } Solver;
 
 extern void debug(Solver*);
-extern void initSolver(Solver*, Parameter*, int problem);
-extern void getResult(Solver*);
+extern void initSolver(int argc, char** argv, Solver*, Parameter*, int problem);
+extern void getResult(Solver*, char*);
 extern void writeResult(Solver*, double*, char*);
 extern int solve(Solver*);
 extern void res_kernel(Solver* solver, double factor, double* res);
 extern void initialize(Solver* solver, int problem);
+extern void finalize();
 #endif

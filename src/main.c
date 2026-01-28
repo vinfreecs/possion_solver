@@ -19,8 +19,6 @@ int main(int argc, char** argv) {
     Parameter params;
     Solver solver;
 
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     initParameter(&params);
 
     if (argc != 2) {
@@ -31,10 +29,9 @@ int main(int argc, char** argv) {
     readParameter(&params, argv[1]);
     if (rank == 0) printParameter(&params);
 
-    initSolver(&solver, &params, 2);
+    initSolver(&argc, argv, &solver, &params, 2);
     // solve(&solver);
-    // getResult(&solver);
-
-    MPI_Finalize();
+    // getResult(&solver, "result.dat");
+    finalize();
     return EXIT_SUCCESS; 
 }
