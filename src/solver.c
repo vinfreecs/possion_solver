@@ -21,7 +21,6 @@ static int sizeOfRank(int rank, int size, int N) {
   return N / size + ((N % size > rank) ? 1 : 0);
 }
 
-
 static void print(Solver *solver) {
   double *p = solver->p;
   int imax = solver->imax;
@@ -128,13 +127,6 @@ void initSolver(Solver *solver, Parameter *params, int problem) {
   double *p = solver->p;
   double *rhs = solver->rhs;
 
-  for (int j = 0; j < jmaxLocal + 2; j++) {
-    double y = solver->ys + j * dy;
-    for (int i = 0; i < imax + 2; i++) {
-      P(i, j) = sin(4.0 * PI * i * dx) + sin(4.0 * PI * y);
-    }
-  }
-
   if (problem == 2) {
     for (int j = 0; j < jmax + 2; j++) {
       for (int i = 0; i < imax + 2; i++) {
@@ -146,6 +138,12 @@ void initSolver(Solver *solver, Parameter *params, int problem) {
       for (int i = 0; i < imax + 2; i++) {
         RHS(i, j) = 0.0;
       }
+    }
+  }
+  for (int j = 0; j < jmaxLocal + 2; j++) {
+    double y = solver->ys + j * dy;
+    for (int i = 0; i < imax + 2; i++) {
+      P(i, j) = 0;
     }
   }
 }

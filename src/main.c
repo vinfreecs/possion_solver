@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <math.h>
 #include <mpi.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -19,11 +20,11 @@
 #include "solver.h"
 #include "timing.h"
 
-void launch_stencil_kernel(double *d_res, double *res, double eps,
+void launch_stencil_kernel(double *d_res, double *h_res, double eps,
                            double factor, int imax, int jmaxLocal, double r,
-                           double idx2, double idy2, double *rhs, double *p,
-                           int rank, int size, int blocksPerGrid,
-                           int threadsPerBlock);
+                           double idx2, double idy2, double *rhs, double *p_old,
+                           double *p_new, int rank, int size, int blocksPerGrid,
+                           int threadsPerBlock, bool compute_norm);
 
 static void exchange_cuda(int rank, int size, double *p, int jmaxLocal,
                           int imax) {
@@ -95,10 +96,14 @@ int main(int argc, char **argv) {
 
   double *p_d;
   checkCudaError(cudaMalloc((void **)&p_d, size_p));
+  checkCudaError(cudaMemcpy(p_d, solver.p, size_p, cudaMemcpyHostToDevice));
+
+  double *p_new_d;
+  checkCudaError(cudaMalloc((void **)&p_new_d, size_p));
+  checkCudaError(cudaMemcpy(p_new_d, p_d, size_p, cudaMemcpyDeviceToDevice));
+
   double *rhs_d;
   checkCudaError(cudaMalloc((void **)&rhs_d, size_rhs));
-
-  checkCudaError(cudaMemcpy(p_d, solver.p, size_p, cudaMemcpyHostToDevice));
   checkCudaError(
       cudaMemcpy(rhs_d, solver.rhs, size_rhs, cudaMemcpyHostToDevice));
   int threadsPerBlock = 256;
@@ -134,20 +139,35 @@ int main(int argc, char **argv) {
   double epssq = eps * eps;
   double size = solver.size;
   res = eps + 1.0;
-
   double start_time = getTimeStamp();
   while ((res >= epssq) && (it < itermax)) {
-    checkCudaError(cudaMemset(d_res, 0, sizeof(double)));
-    res = 0.0;
+    bool compute_norm = (it % 1000 == 0);
+
+    if (compute_norm)
+      checkCudaError(cudaMemset(d_res, 0, sizeof(double)));
+
     exchange_cuda(rank, size, p_d, jmaxLocal, imax);
+
     launch_stencil_kernel(d_res, &res, eps, factor, imax, jmaxLocal, r, idx2,
-                          idy2, rhs_d, p_d, rank, size, blocksPerGrid,
-                          threadsPerBlock);
-    // if (it % 100 == 0) {
-    // }
-    MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    res = res1;
-    res = sqrt(res / (imax * jmax));
+                          idy2, rhs_d, p_d, p_new_d, rank, size, blocksPerGrid,
+                          threadsPerBlock, compute_norm);
+
+    double *temp = p_d;
+    p_d = p_new_d;
+    p_new_d = temp;
+
+    if (compute_norm) {
+      checkCudaError(
+          cudaMemcpy(&res, d_res, sizeof(double), cudaMemcpyDeviceToHost));
+      MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+      res = res1;
+      res = sqrt(res / (imax * jmax));
+
+      if (rank == 0)
+        printf("Iter %d, Residual: %f\n", it, res);
+      if (isnan(res))
+        break;
+    }
     it++;
   }
   double stop_time = getTimeStamp();
@@ -158,7 +178,7 @@ int main(int argc, char **argv) {
 
   // CUDA
 
-  getResult(&solver);
+  // getResult(&solver);
 
   double time_taken = stop_time - start_time;
   printf("Solver took %d iterations\n", it);
@@ -168,6 +188,7 @@ int main(int argc, char **argv) {
 
   // CUDA
   cudaFree(p_d);
+  cudaFree(p_new_d);
   cudaFree(rhs_d);
   checkCudaError(cudaFree(d_res));
   // CUDA
