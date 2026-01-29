@@ -29,9 +29,9 @@ int main(int argc, char** argv) {
     readParameter(&params, argv[1]);
     if (rank == 0) printParameter(&params);
 
-    initSolver(&argc, argv, &solver, &params, 2);
-    // solve(&solver);
-    // getResult(&solver, "result.dat");
-    finalize();
+    initSolver(argc, argv, &solver, &params, 2);
+    solve(&solver);
+    getResult(&solver, "result.dat");
+    finalize(&solver);
     return EXIT_SUCCESS; 
 }

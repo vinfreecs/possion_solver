@@ -12,12 +12,27 @@
 #include "allocate.h"
 #include "parameter.h"
 #include "solver.h"
+// #include "util.h"
+// #include "cuda-util.h"
 
 #define PI        3.14159265358979323846
 #define P(i, j)   p[(j) * (imax + 2) + (i)]
-#define RHS_D(i, j) rhs[(j) * (imax + 2) + (i)]
+#define RHS(i, j) rhs[(j) * (imax + 2) + (i)]
 #define P_D(i, j) p_d[(j) * (imax + 2) + (i)]
 #define RHS_D(i, j) rhs_d[(j) * (imax + 2) + (i)]
+
+// #define checkCudaError(...) \
+//     checkCudaErrorImpl(__FILE__, __LINE__, __VA_ARGS__)
+
+// inline void checkCudaErrorImpl(const char* file, int line, cudaError_t code, bool checkGetLastError) {
+//     if (cudaSuccess != code) {
+//         fprintf(stderr, "CUDA Error (%s : %d) --- %s\n", file, line, cudaGetErrorString(code));
+//         exit(1);
+//     }
+//     if (checkGetLastError) {
+//         checkCudaErrorImpl(file, line, cudaGetLastError(), false);
+//     }
+// }
 
 static int sizeOfRank(int rank, int size, int N) {
     return N / size + ((N % size > rank) ? 1 : 0);
@@ -73,7 +88,7 @@ void getResult(Solver* solver, char filename[]) {
     int *rcvCounts, *displs;
 
     if (solver->rank == 0) {
-        Pall = allocate(64, (solver->imax + 2) * (solver->jmax + 2) * sizeof(double));
+        checkCudaError(cudaMallocHost(&Pall, (solver->imax + 2) * (solver->jmax + 2) * sizeof(double)), false);
         rcvCounts    = (int*)malloc(solver->size * sizeof(int));
         displs       = (int*)malloc(solver->size * sizeof(int));
         rcvCounts[0] = solver->jmaxLocal * (solver->imax + 2);
@@ -106,7 +121,7 @@ void getResult(Solver* solver, char filename[]) {
 
 void initSolver(int argc, char** argv, Solver* solver, Parameter* params, int problem) {
     MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     MPI_Comm_rank(MPI_COMM_WORLD, &(solver->rank));
     MPI_Comm_size(MPI_COMM_WORLD, &(solver->size));
@@ -129,15 +144,15 @@ void initSolver(int argc, char** argv, Solver* solver, Parameter* params, int pr
     int jmax      = solver->jmax;
     int jmaxLocal = solver->jmaxLocal;
 
-    checkCudaError(cudaMallocHost(&solver->p , (imax + 2) * (jmaxLocal + 2) * sizeof(double)));
-    checkCudaError(cudaMallocHost(&solver->rhs, (imax + 2) * (jmaxLocal + 2) * sizeof(double)));
+    checkCudaError(cudaMallocHost(&solver->p , (imax + 2) * (jmaxLocal + 2) * sizeof(double)), false);
+    checkCudaError(cudaMallocHost(&solver->rhs, (imax + 2) * (jmaxLocal + 2) * sizeof(double)), false);
 
-    checkCudaError(cudaMalloc(&solver->d_p , (imax + 2) * (jmaxLocal + 2) * sizeof(double)));
-    checkCudaError(cudaMalloc(&solver->d_rhs , (imax + 2) * (jmaxLocal + 2) * sizeof(double)));
-    checkCudaError(cudaMemcpy(solver->d_p, solver->p, (imax + 2) * (jmaxLocal + 2) * sizeof(double), cudaMemcpyHostToDevice));
-    checkCudaError(cudaMemcpy(solver->d_rhs, solver->rhs, (imax + 2) * (jmaxLocal + 2) * sizeof(double), cudaMemcpyHostToDevice));
-
-    init_kernel<<<1,1>>>(solver, problem);
+    checkCudaError(cudaMalloc(&solver->p_d , (imax + 2) * (jmaxLocal + 2) * sizeof(double)), false);
+    checkCudaError(cudaMalloc(&solver->rhs_d , (imax + 2) * (jmaxLocal + 2) * sizeof(double)), false);
+    checkCudaError(cudaMemcpy(solver->p_d, solver->p, (imax + 2) * (jmaxLocal + 2) * sizeof(double), cudaMemcpyHostToDevice), false);
+    checkCudaError(cudaMemcpy(solver->rhs_d, solver->rhs, (imax + 2) * (jmaxLocal + 2) * sizeof(double), cudaMemcpyHostToDevice), false);
+    init_kernel<<<32,32>>>(solver, problem);
+    checkCudaError(cudaGetLastError(), true);
     checkCudaError(cudaDeviceSynchronize(), true);
     getResult(solver, "init.dat");
 }
@@ -175,7 +190,7 @@ void debug(Solver* solver) {
     }
 }
 __global__
-void init_kernel(Solver* __restrict__ solver, int problem) {
+void init_kernel(double* p_d, int problem) {
     int imax = solver->imax;
     int jmaxLocal = solver->jmaxLocal;
     double dx   = solver->dx;
@@ -208,10 +223,16 @@ void init_kernel(Solver* __restrict__ solver, int problem) {
 }
 __global__
 void res_kernel(Solver* solver, double factor, double* res) {
-    int imax = solver->imax;
-    int jmaxLocal = solver->imaxLocal;
-    double* p = solver->p;
 
+    int imax = solver->imax;
+    int jmaxLocal = solver->jmaxLocal;
+    double* p_d = solver->p_d;
+    double* rhs_d = solver->rhs_d;
+    double r;
+    double dx2    = solver->dx * solver->dx;
+    double dy2 = solver->dy * solver->dy;
+    double idx2   = 1.0 / dx2;
+    double idy2   = 1.0 / dy2;
     for (int j = 1; j < jmaxLocal + 1; j++) {
         for (int i = 1; i < imax + 1; i++) {
 
@@ -226,7 +247,10 @@ void res_kernel(Solver* solver, double factor, double* res) {
 }
 
 __global__
-void copyHorizantal(double* p, int imax, int jmaxLocal) {
+void copyHorizantal(Solver* solver) {
+    double* p_d = solver->p_d;
+    int imax = solver->imax;
+    int jmaxLocal = solver->jmaxLocal;
     // impelementation of horizantal boundaries
     for (int j = 1; j < jmaxLocal + 1; j++) {
             P_D(0, j)        = P_D(1, j);
@@ -235,10 +259,10 @@ void copyHorizantal(double* p, int imax, int jmaxLocal) {
 }
 
 __global__
-void copyVertical(solver* solver) {
+void copyVertical(Solver* solver) {
     int imax = solver->imax;
     int jmaxLocal = solver->jmaxLocal;
-    double* p = solver->p;
+    double* p_d = solver->p_d;
     int rank = solver->rank;
     int size = solver->size;
 
@@ -293,7 +317,7 @@ int solve(Solver* solver) {
         //         res += (r * r);
         //     }
         // }
-        res_kernel<<<imax/256, 256>>>(solver, factor, res);
+        res_kernel<<<imax/256, 256>>>(solver, factor, &res);
         checkCudaError(cudaDeviceSynchronize(), true);
 
         // if (solver->rank != 0) {
@@ -313,7 +337,7 @@ int solve(Solver* solver) {
         //     P(imax + 1, j) = P(imax, j);
         // }
         copyVertical<<<res/256, 256>>>(solver);
-        copyHorizantal<<<res/256, 256>>>(p, imax, jmaxLocal);
+        copyHorizantal<<<res/256, 256>>>(solver);
         checkCudaError(cudaDeviceSynchronize(), true);
         MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         res = res1;
@@ -392,7 +416,7 @@ int solveRB(Solver* solver) {
         //     P(0, j)        = P(1, j);
         //     P(imax + 1, j) = P(imax, j);
         // }
-        res_kernel<<<
+        // res_kernel<<<imax/256, 256>>>(solver, factor, res);
         MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         res = res1;
         res = res / (double)(imax * jmax);
@@ -483,30 +507,30 @@ int solveRB(Solver* solver) {
 //     printf("Solver took %d iterations to reach %f\n", it, sqrt(res));
 // }
 
-// void writeResult(Solver* solver, double* m, char* filename) {
-//     int imax  = solver->imax;
-//     int jmax  = solver->jmax;
-//     double* p = solver->p;
+void writeResult(Solver* solver, double* m, char* filename) {
+    int imax  = solver->imax;
+    int jmax  = solver->jmax;
+    double* p = solver->p;
 
-//     FILE* fp;
-//     fp = fopen(filename, "w");
+    FILE* fp;
+    fp = fopen(filename, "w");
 
-//     if (fp == NULL) {
-//         printf("Error!\n");
-//         exit(EXIT_FAILURE);
-//     }
+    if (fp == NULL) {
+        printf("Error!\n");
+        exit(EXIT_FAILURE);
+    }
 
-//     for (int j = 0; j < jmax + 2; j++) {
-//         for (int i = 0; i < imax + 2; i++) {
-//             fprintf(fp, "%f ", m[j * (imax + 2) + i]);
-//         }
-//         fprintf(fp, "\n");
-//     }
+    for (int j = 0; j < jmax + 2; j++) {
+        for (int i = 0; i < imax + 2; i++) {
+            fprintf(fp, "%f ", m[j * (imax + 2) + i]);
+        }
+        fprintf(fp, "\n");
+    }
 
-//     fclose(fp);
-// }
+    fclose(fp);
+}
 
-void finalize() {
+void finalize(Solver* solver) {
     MPI_Finalize();
 
     checkCudaError(cudaFreeHost(solver->p), true);

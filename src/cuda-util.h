@@ -1,16 +1,18 @@
 #pragma once
-
-#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <cuda_runtime.h>
+#include <stdbool.h>
 
 #define checkCudaError(...) \
     checkCudaErrorImpl(__FILE__, __LINE__, __VA_ARGS__)
 
-inline void checkCudaErrorImpl(const std::string &file, int line, cudaError_t code, bool checkGetLastError = false) {
+inline void checkCudaErrorImpl(const char* file, int line, cudaError_t code, bool checkGetLastError) {
     if (cudaSuccess != code) {
-        std::cerr << "CUDA Error (" << file << " : " << line << ") --- " << cudaGetErrorString(code) << std::endl;
+        fprintf(stderr, "CUDA Error (%s : %d) --- %s\n", file, line, cudaGetErrorString(code));
         exit(1);
     }
-
-    if (checkGetLastError)
+    if (checkGetLastError) {
         checkCudaErrorImpl(file, line, cudaGetLastError(), false);
+    }
 }

@@ -4,9 +4,8 @@
 # Use of this source code is governed by a MIT-style
 # license that can be found in the LICENSE file.
 #=======================================================================================
-
 #CONFIGURE BUILD SYSTEM
-TARGET	   = exe-$(TAG)
+TARGET     = exe-$(TAG)
 BUILD_DIR  = ./$(TAG)
 SRC_DIR    = ./src
 MAKE_DIR   = ./
@@ -19,26 +18,29 @@ INCLUDES  += -I$(SRC_DIR)/includes -I$(BUILD_DIR)
 
 VPATH     = $(SRC_DIR)
 ASM       = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.s,$(wildcard $(SRC_DIR)/*.c))
-C_OBJ       = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o,$(wildcard $(SRC_DIR)/*.c))
+C_OBJ     = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o,$(wildcard $(SRC_DIR)/*.c))
 CU_OBJ    = $(patsubst $(SRC_DIR)/%.cu, $(BUILD_DIR)/%.o,$(wildcard $(SRC_DIR)/*.cu))
 OBJ       = $(C_OBJ) $(CU_OBJ) 
+
 CPPFLAGS := $(CPPFLAGS) $(DEFINES) $(OPTIONS) $(INCLUDES)
 
 ${TARGET}: $(BUILD_DIR) $(OBJ) 
 	$(info ===>  LINKING  $(TARGET))
 	$(Q)${LINKER} ${LFLAGS} -o $(TARGET) $(OBJ) $(LIBS)
 
+# Compile C files with regular C compiler
 $(BUILD_DIR)/%.o:  %.c $(MAKE_DIR)/include_$(TAG).mk
 	$(info ===>  COMPILE  $@)
-	$(CC) -c $(CPPFLAGS) $(CFLAGS) $< -o $@
-# 	$(Q)$(GCC) $(CPPFLAGS) -MT $(@:.d=.o) -MM  $< > $(BUILD_DIR)/$*.d
+	$(Q)$(CC) -c $(CPPFLAGS) $(CFLAGS) $< -o $@
 
+# Compile CUDA files with nvcc
 $(BUILD_DIR)/%.o:  %.cu $(MAKE_DIR)/include_$(TAG).mk
 	$(info ===>  COMPILE CUDA $@)
-	$(Q)$(CC) -c $(CPPFLAGS) $(CFLAGS) $< -o $@
+	$(Q)$(NVCC) -c $(INCLUDES) $(NVCCFLAGS) $< -o $@
+
 $(BUILD_DIR)/%.s:  %.c
 	$(info ===>  GENERATE ASM  $@)
-	$(CC) -S $(CPPFLAGS) $(CFLAGS) $< -o $@
+	$(Q)$(CC) -S $(CPPFLAGS) $(CFLAGS) $< -o $@
 
 .PHONY: clean distclean tags info asm
 

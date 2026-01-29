@@ -7,6 +7,9 @@
 #ifndef __SOLVER_H_
 #define __SOLVER_H_
 #include "parameter.h"
+#include "cuda-util.h"
+#include "cuda_runtime.h"
+#include "util.h"
 
 typedef struct {
     double dx, dy;
@@ -17,17 +20,29 @@ typedef struct {
     int size;
 
     double *p, *rhs;
-    double *d_p, *d_rhs;
+    double *p_d, *rhs_d;
     double eps, omega;
     int itermax;
 } Solver;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern void debug(Solver*);
 extern void initSolver(int argc, char** argv, Solver*, Parameter*, int problem);
 extern void getResult(Solver*, char*);
 extern void writeResult(Solver*, double*, char*);
 extern int solve(Solver*);
-extern void res_kernel(Solver* solver, double factor, double* res);
-extern void initialize(Solver* solver, int problem);
-extern void finalize();
+extern void finalize(Solver* solver);
+
+#ifdef __cplusplus
+}
+#endif
+
+#ifdef __CUDACC__
+extern __global__ void res_kernel(Solver* solver, double factor, double* res);
+extern __global__ void init_kernel(Solver* solver, int problem);
+#endif
+
 #endif
