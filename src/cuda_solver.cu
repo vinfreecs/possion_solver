@@ -4,7 +4,7 @@
 #include "cuda_runtime.h"
 #include "cuda_solver.cuh"
 #include <cstdio>
-#include <cub/cub.cuh> // or equivalently <cub/block/block_reduce.cuh>
+#include <cub/cub.cuh>
 
 #define PI 3.14159265358979323846
 #define P(i, j) p[(j) * (imax + 2) + (i)]
@@ -31,7 +31,6 @@ __global__ void stencil_cuda(double *d_res, double eps, double factor, int imax,
   }
   if (compute_norm) {
     double aggregate = BlockReduce(temp_storage).Sum(temp);
-    // atomicAdd(d_res, temp);
     if (threadIdx.x == 0 && threadIdx.y == 0)
       atomicAdd(d_res, aggregate);
   }
@@ -44,15 +43,12 @@ __global__ void outer_boundary_cuda(double *p_new, int rank, int size, int imax,
   if (i > imax + 1) {
     return;
   }
-
   if (rank == 0 && i <= imax + 1) {
     P_N(i, 0) = P_N(i, 1);
   }
-
   if (rank == (size - 1) && i <= imax + 1) {
     P_N(i, jmaxLocal + 1) = P_N(i, jmaxLocal);
   }
-
   if (i <= jmaxLocal + 1) {
     P_N(0, i) = P_N(1, i);
     P_N(imax + 1, i) = P_N(imax, i);
@@ -73,9 +69,9 @@ extern "C" void launch_stencil_kernel(double *d_res, double *h_res, double eps,
   stencil_cuda<<<blocks, threads>>>(d_res, eps, factor, imax, jmaxLocal, r,
                                     idx2, idy2, rhs, p, p_new, compute_norm);
 
+  checkCudaError(cudaGetLastError());
+  checkCudaError(cudaDeviceSynchronize());
   int boundary_blocks = (imax + 2 + threadsPerBlock - 1) / threadsPerBlock;
   outer_boundary_cuda<<<boundary_blocks, threadsPerBlock>>>(p_new, rank, size,
                                                             imax, jmaxLocal);
-  checkCudaError(cudaGetLastError());
-  checkCudaError(cudaDeviceSynchronize());
 }

@@ -7,3 +7,5 @@ debug/
 module_load.sh
 p.dat
 p.png
+exe-*
+CUDA/

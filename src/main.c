@@ -163,10 +163,11 @@ int main(int argc, char **argv) {
       res = res1;
       res = sqrt(res / (imax * jmax));
 
-      if (rank == 0)
+#ifdef DEBUG
+      if (rank == 0) {
         printf("Iter %d, Residual: %f\n", it, res);
-      if (isnan(res))
-        break;
+      }
+#endif
     }
     it++;
   }
