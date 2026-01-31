@@ -15,7 +15,7 @@
 #include "solver.h"
 
 int main(int argc, char** argv) {
-    int rank;
+    // int rank;
     Parameter params;
     Solver solver;
 
@@ -27,9 +27,9 @@ int main(int argc, char** argv) {
     }
 
     readParameter(&params, argv[1]);
-    if (rank == 0) printParameter(&params);
 
     initSolver(argc, argv, &solver, &params, 2);
+    if (solver.rank == 0) printParameter(&params);
     solve(&solver);
     getResult(&solver, "result.dat");
     finalize(&solver);

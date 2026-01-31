@@ -57,11 +57,13 @@ info:
 	$(info $(CFLAGS))
 	$(Q)$(CC) $(VERSION)
 
-asm:  $(BUILD_DIR) $(ASM)
+asm:  
+	$(info ===> GENERATE ASM FILES)
+	$(BUILD_DIR) $(ASM)
 
 tags:
 	$(info ===>  GENERATE TAGS)
-	$(Q)ctags -R
+	$(Q)-ctags -R
 
 $(BUILD_DIR):
 	@mkdir $(BUILD_DIR)

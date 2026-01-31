@@ -41,8 +41,9 @@ extern void finalize(Solver* solver);
 #endif
 
 #ifdef __CUDACC__
-extern __global__ void res_kernel(Solver* solver, double factor, double* res);
-extern __global__ void init_kernel(Solver* solver, int problem);
+extern __global__ void res_kernel(double*, double*, double*, int, int, double, double, double);
+extern __global__ void init_kernel(double* , double*, int , int, double, double, double,  int);
+extern __global__ void outerBoundaryCopy(double*, int, int, int, int);
 #endif
 
 #endif
