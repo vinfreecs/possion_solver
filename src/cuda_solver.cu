@@ -68,9 +68,6 @@ extern "C" void launch_stencil_kernel(double *d_res, double *h_res, double eps,
 
   stencil_cuda<<<blocks, threads>>>(d_res, eps, factor, imax, jmaxLocal, r,
                                     idx2, idy2, rhs, p, p_new, compute_norm);
-
-  checkCudaError(cudaGetLastError());
-  checkCudaError(cudaDeviceSynchronize());
   int boundary_blocks = (imax + 2 + threadsPerBlock - 1) / threadsPerBlock;
   outer_boundary_cuda<<<boundary_blocks, threadsPerBlock>>>(p_new, rank, size,
                                                             imax, jmaxLocal);

@@ -19,3 +19,6 @@ module load intel likwid nvhpc openmpi cuda
 # mpicc main.o cuda_solver.o parameter.o affinity.o allocate.o solver.o timing.o -o check -L/${CUDA_HOME}/lib64 -lcudart -lm
 
 nvcc -ccbin mpicc src/main.c src/cuda_solver.cu src/parameter.c src/allocate.c src/affinity.c src/timing.c src/solver.c -arch=sm_86 -o check -lm
+
+# # to run nsys profiling
+# mpirun -n 1 nsys profile --trace=cuda,mpi --output=checking_nsys_prof_2k --force-overwrite=true --stats=true ./exe-CUDA poisson.par >> nsys_2k_stats

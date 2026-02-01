@@ -139,6 +139,10 @@ int main(int argc, char **argv) {
   double epssq = eps * eps;
   double size = solver.size;
   res = eps + 1.0;
+  if (rank == 0) {
+    printf("[ ");
+    fflush(stdout);
+  }
   double start_time = getTimeStamp();
   while ((res >= epssq) && (it < itermax)) {
     bool compute_norm = (it % 1000 == 0);
@@ -162,7 +166,10 @@ int main(int argc, char **argv) {
       MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
       res = res1;
       res = sqrt(res / (imax * jmax));
-
+      if (rank == 0) {
+        printf("#");
+        fflush(stdout);
+      }
 #ifdef DEBUG
       if (rank == 0) {
         printf("Iter %d, Residual: %f\n", it, res);
@@ -183,7 +190,7 @@ int main(int argc, char **argv) {
 
   if (rank == 0) {
     double time_taken = stop_time - start_time;
-    printf("Solver took %d iterations\n", it);
+    printf("Solver took %d iterations\n and residual is %f", it, res);
     printf("Time taken is %f \n", time_taken);
     double perf = (double)it * (double)imax * (double)jmax / (time_taken * 1e6);
     printf("The performance %f in MLUP/s \n", perf);

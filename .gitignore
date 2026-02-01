@@ -9,3 +9,5 @@ p.dat
 p.png
 exe-*
 CUDA/
+*.log
+poisson_*.par
