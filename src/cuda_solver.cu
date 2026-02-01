@@ -12,16 +12,16 @@
 #define RHS(i, j) rhs[(j) * (imax + 2) + (i)]
 
 __global__ void stencil_cuda(double *d_res, double eps, double factor, int imax,
-                             int jmaxLocal, double r, double idx2, double idy2,
-                             double *rhs, double *p, double *p_new,
-                             bool compute_norm) {
+                             int jmaxLocal_start, int jmaxLocal_end, double r,
+                             double idx2, double idy2, double *rhs, double *p,
+                             double *p_new, bool compute_norm) {
 
   using BlockReduce = cub::BlockReduce<double, 256>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
   int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
-  int j = blockIdx.y * blockDim.y + threadIdx.y + 1;
+  int j = blockIdx.y * blockDim.y + threadIdx.y + jmaxLocal_start;
   double temp = 0;
-  if (j <= jmaxLocal && i <= imax) {
+  if (j <= jmaxLocal_end && i <= imax) {
 
     r = RHS(i, j) - ((P(i - 1, j) - 2.0 * P(i, j) + P(i + 1, j)) * idx2 +
                      (P(i, j - 1) - 2.0 * P(i, j) + P(i, j + 1)) * idy2);
@@ -56,19 +56,29 @@ __global__ void outer_boundary_cuda(double *p_new, int rank, int size, int imax,
 }
 
 extern "C" void launch_stencil_kernel(double *d_res, double *h_res, double eps,
-                                      double factor, int imax, int jmaxLocal,
+                                      double factor, int imax,
+                                      int jmaxLocal_start, int jmaxLocal_end,
                                       double r, double idx2, double idy2,
                                       double *rhs, double *p, double *p_new,
                                       int rank, int size, int blocksPerGrid,
-                                      int threadsPerBlock, bool compute_norm) {
-
+                                      int threadsPerBlock, bool compute_norm,
+                                      cudaStream_t stream) {
+  int rows_to_compute = jmaxLocal_end - jmaxLocal_start + 1;
+  if (rows_to_compute < 1)
+    return;
   dim3 threads(32, 8);
   dim3 blocks((imax + threads.x - 1) / threads.x,
-              (jmaxLocal + threads.y - 1) / threads.y);
+              (rows_to_compute + threads.y - 1) / threads.y);
 
-  stencil_cuda<<<blocks, threads>>>(d_res, eps, factor, imax, jmaxLocal, r,
-                                    idx2, idy2, rhs, p, p_new, compute_norm);
-  int boundary_blocks = (imax + 2 + threadsPerBlock - 1) / threadsPerBlock;
-  outer_boundary_cuda<<<boundary_blocks, threadsPerBlock>>>(p_new, rank, size,
-                                                            imax, jmaxLocal);
+  stencil_cuda<<<blocks, threads, 0, stream>>>(
+      d_res, eps, factor, imax, jmaxLocal_start, jmaxLocal_end, r, idx2, idy2,
+      rhs, p, p_new, compute_norm);
+}
+
+extern "C" void launch_boundary(int imax, int jmaxLocal, double *p_new,
+                                int rank, int size, int boundary_blocks,
+                                int threadsPerBlock, cudaStream_t stream) {
+
+  outer_boundary_cuda<<<boundary_blocks, threadsPerBlock, 0, stream>>>(
+      p_new, rank, size, imax, jmaxLocal);
 }

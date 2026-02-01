@@ -21,11 +21,15 @@
 #include "timing.h"
 
 void launch_stencil_kernel(double *d_res, double *h_res, double eps,
-                           double factor, int imax, int jmaxLocal, double r,
-                           double idx2, double idy2, double *rhs, double *p_old,
+                           double factor, int imax, int jmaxLocal_start,
+                           int jmaxLocal_end, double r, double idx2,
+                           double idy2, double *rhs, double *p_old,
                            double *p_new, int rank, int size, int blocksPerGrid,
-                           int threadsPerBlock, bool compute_norm);
-
+                           int threadsPerBlock, bool compute_norm,
+                           cudaStream_t stream);
+void launch_boundary(int imax, int jmaxLocal, double *p_new, int rank, int size,
+                     int blocksPerGrid, int threadsPerBlock,
+                     cudaStream_t stream);
 static void exchange_cuda(int rank, int size, double *p, int jmaxLocal,
                           int imax) {
   MPI_Request requests[4] = {MPI_REQUEST_NULL, MPI_REQUEST_NULL,
@@ -121,14 +125,12 @@ int main(int argc, char **argv) {
   double r;
   int it = 0;
   double res, res1;
-
   int imax = solver.imax;
   int jmax = solver.jmax;
   int jmaxLocal = solver.jmaxLocal;
   double eps = solver.eps;
   double omega = solver.omega;
   int itermax = solver.itermax;
-
   double dx2 = solver.dx * solver.dx;
   double dy2 = solver.dy * solver.dy;
   double idx2 = 1.0 / dx2;
@@ -139,10 +141,16 @@ int main(int argc, char **argv) {
   double epssq = eps * eps;
   double size = solver.size;
   res = eps + 1.0;
-  if (rank == 0) {
-    printf("[ ");
-    fflush(stdout);
-  }
+  int highPriority = 0, lowPriority = 0; // streams
+  checkCudaError(cudaDeviceGetStreamPriorityRange(&lowPriority, &highPriority));
+  cudaStream_t stream_stencil;
+  checkCudaError(cudaStreamCreateWithPriority(&stream_stencil,
+                                              cudaStreamDefault, lowPriority));
+  cudaStream_t stream_boundary;
+  checkCudaError(cudaStreamCreateWithPriority(&stream_boundary,
+                                              cudaStreamDefault, highPriority));
+  cudaEvent_t event_boundary;
+  checkCudaError(cudaEventCreate(&event_boundary));
   double start_time = getTimeStamp();
   while ((res >= epssq) && (it < itermax)) {
     bool compute_norm = (it % 1000 == 0);
@@ -150,12 +158,30 @@ int main(int argc, char **argv) {
     if (compute_norm)
       checkCudaError(cudaMemset(d_res, 0, sizeof(double)));
 
-    exchange_cuda(rank, size, p_d, jmaxLocal, imax);
+    launch_stencil_kernel(d_res, &res, eps, factor, imax, 1, 1, r, idx2, idy2,
+                          rhs_d, p_d, p_new_d, rank, size, blocksPerGrid,
+                          threadsPerBlock, compute_norm, stream_boundary);
+    launch_stencil_kernel(d_res, &res, eps, factor, imax, jmaxLocal, jmaxLocal,
+                          r, idx2, idy2, rhs_d, p_d, p_new_d, rank, size,
+                          blocksPerGrid, threadsPerBlock, compute_norm,
+                          stream_boundary);
+    int boundary_blocks = (imax + 2 + threadsPerBlock - 1) / threadsPerBlock;
+    launch_boundary(imax, jmaxLocal, p_new_d, rank, size, boundary_blocks,
+                    threadsPerBlock, stream_boundary);
+    // record the boundary event is finished in the stream
+    checkCudaError(cudaEventRecord(event_boundary, stream_boundary));
+    launch_stencil_kernel(d_res, &res, eps, factor, imax, 1, jmaxLocal - 1, r,
+                          idx2, idy2, rhs_d, p_d, p_new_d, rank, size,
+                          blocksPerGrid, threadsPerBlock, compute_norm,
+                          stream_stencil);
 
-    launch_stencil_kernel(d_res, &res, eps, factor, imax, jmaxLocal, r, idx2,
-                          idy2, rhs_d, p_d, p_new_d, rank, size, blocksPerGrid,
-                          threadsPerBlock, compute_norm);
-
+    checkCudaError(cudaEventSynchronize(event_boundary));
+    exchange_cuda(rank, size, p_new_d, jmaxLocal, imax);
+    cudaStreamSynchronize(stream_boundary);
+    // Example
+    //  cudaEventRecord(startEvent, stream);
+    //  my_kernel<<<grid, block, 0, stream>>>(...);
+    //  cudaEventRecord(endEvent, stream);
     double *temp = p_d;
     p_d = p_new_d;
     p_new_d = temp;
@@ -166,10 +192,7 @@ int main(int argc, char **argv) {
       MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
       res = res1;
       res = sqrt(res / (imax * jmax));
-      if (rank == 0) {
-        printf("#");
-        fflush(stdout);
-      }
+
 #ifdef DEBUG
       if (rank == 0) {
         printf("Iter %d, Residual: %f\n", it, res);
@@ -179,7 +202,6 @@ int main(int argc, char **argv) {
     it++;
   }
   double stop_time = getTimeStamp();
-
   checkCudaError(cudaMemcpy(solver.p, p_d, size_p, cudaMemcpyDeviceToHost));
   checkCudaError(
       cudaMemcpy(solver.rhs, rhs_d, size_rhs, cudaMemcpyDeviceToHost));
@@ -195,6 +217,10 @@ int main(int argc, char **argv) {
     double perf = (double)it * (double)imax * (double)jmax / (time_taken * 1e6);
     printf("The performance %f in MLUP/s \n", perf);
   }
+
+  checkCudaError(cudaStreamDestroy(stream_stencil));
+  checkCudaError(cudaStreamDestroy(stream_boundary));
+  checkCudaError(cudaEventDestroy(event_boundary));
 
   // CUDA
   cudaFree(p_d);
