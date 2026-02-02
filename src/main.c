@@ -79,8 +79,6 @@ int main(int argc, char **argv) {
 
   int num_devices = 0;
 
-  // CUDA
-  // TODO in host initialzing only once
   //  Gets number of GPU device per node.
   checkCudaError(cudaGetDeviceCount(&num_devices));
   // Particular MPI rank invoking this selects the GPU for execution
@@ -89,62 +87,12 @@ int main(int argc, char **argv) {
   printf("Rank %d selected GPU %d out of %d GPUs\n", rank, device_id,
          num_devices);
 
-  // CUDA
-
   // intialising the data on the gpu
   initSolver(&solver, &params, 2);
 
-  // CUDA
-  int size_p = (solver.imax + 2) * (solver.jmaxLocal + 2) * sizeof(double);
-  int size_rhs = (solver.imax + 2) * (solver.jmax + 2) * sizeof(double);
+  // memory allocation initial transfer stream creation
+  CUDA_SETUP()
 
-  double *p_d;
-  checkCudaError(cudaMalloc((void **)&p_d, size_p));
-  checkCudaError(cudaMemcpy(p_d, solver.p, size_p, cudaMemcpyHostToDevice));
-
-  double *p_new_d;
-  checkCudaError(cudaMalloc((void **)&p_new_d, size_p));
-  checkCudaError(cudaMemcpy(p_new_d, p_d, size_p, cudaMemcpyDeviceToDevice));
-
-  double *rhs_d;
-  checkCudaError(cudaMalloc((void **)&rhs_d, size_rhs));
-  checkCudaError(
-      cudaMemcpy(rhs_d, solver.rhs, size_rhs, cudaMemcpyHostToDevice));
-  int threadsPerBlock = 256;
-  int blocksPerGrid =
-      (solver.jmaxLocal + threadsPerBlock - 1) / threadsPerBlock;
-  double *d_res;
-  checkCudaError(cudaMalloc((void **)&d_res, sizeof(double)));
-
-  double r;
-  int it = 0;
-  double res, res1;
-  int imax = solver.imax;
-  int jmax = solver.jmax;
-  int jmaxLocal = solver.jmaxLocal;
-  double eps = solver.eps;
-  double omega = solver.omega;
-  int itermax = solver.itermax;
-  double dx2 = solver.dx * solver.dx;
-  double dy2 = solver.dy * solver.dy;
-  double idx2 = 1.0 / dx2;
-  double idy2 = 1.0 / dy2;
-  double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
-  double *p = solver.p;
-  double *rhs = solver.rhs;
-  double epssq = eps * eps;
-  double size = solver.size;
-  res = eps + 1.0;
-  int highPriority = 0, lowPriority = 0; // streams
-  checkCudaError(cudaDeviceGetStreamPriorityRange(&lowPriority, &highPriority));
-  cudaStream_t stream_stencil;
-  checkCudaError(cudaStreamCreateWithPriority(&stream_stencil,
-                                              cudaStreamDefault, lowPriority));
-  cudaStream_t stream_boundary;
-  checkCudaError(cudaStreamCreateWithPriority(&stream_boundary,
-                                              cudaStreamDefault, highPriority));
-  cudaEvent_t event_boundary;
-  checkCudaError(cudaEventCreate(&event_boundary));
   double start_time = getTimeStamp();
   while ((res >= epssq) && (it < itermax)) {
     bool compute_norm = (it % 1000 == 0);
@@ -173,10 +121,6 @@ int main(int argc, char **argv) {
     checkCudaError(cudaEventSynchronize(event_boundary));
     exchange_cuda(rank, size, p_new_d, jmaxLocal, imax);
     cudaStreamSynchronize(stream_boundary);
-    // Example
-    //  cudaEventRecord(startEvent, stream);
-    //  my_kernel<<<grid, block, 0, stream>>>(...);
-    //  cudaEventRecord(endEvent, stream);
     double *temp = p_d;
     p_d = p_new_d;
     p_new_d = temp;
@@ -197,13 +141,6 @@ int main(int argc, char **argv) {
     it++;
   }
   double stop_time = getTimeStamp();
-  checkCudaError(cudaMemcpy(solver.p, p_d, size_p, cudaMemcpyDeviceToHost));
-  checkCudaError(
-      cudaMemcpy(solver.rhs, rhs_d, size_rhs, cudaMemcpyDeviceToHost));
-
-  // CUDA
-
-  // getResult(&solver);
 
   if (rank == 0) {
     double time_taken = stop_time - start_time;
@@ -213,15 +150,8 @@ int main(int argc, char **argv) {
     printf("The performance %f in MLUP/s \n", perf);
   }
 
-  checkCudaError(cudaStreamDestroy(stream_stencil));
-  checkCudaError(cudaStreamDestroy(stream_boundary));
-  checkCudaError(cudaEventDestroy(event_boundary));
-
-  // CUDA
-  cudaFree(p_d);
-  cudaFree(p_new_d);
-  cudaFree(rhs_d);
-  checkCudaError(cudaFree(d_res));
+  CLEAN_UP_CUDA()
+  // getResult(&solver);
   // CUDA
   MPI_Finalize();
   return EXIT_SUCCESS;
