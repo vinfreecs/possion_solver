@@ -25,7 +25,14 @@ void launch_stencil_kernel(double *d_res, double *h_res, double eps,
                            double idx2, double idy2, double *rhs, double *p_old,
                            double *p_new, int rank, int size, int blocksPerGrid,
                            int threadsPerBlock, bool compute_norm);
-
+void launch_stencil_kernel_rb(double *d_res, double *h_res, double eps,
+                              double factor, int imax, int jmaxLocal, double r,
+                              double idx2, double idy2, double *rhs, double *p,
+                              int rank, int size, int blocksPerGrid,
+                              int threadsPerBlock, bool compute_norm, int r_b);
+void launch_boundary_kernel_rb(int imax, int jmaxLocal, double *p, int rank,
+                               int size, int boundary_blocks,
+                               int threadsPerBlock);
 static void exchange_cuda(int rank, int size, double *p, int jmaxLocal,
                           int imax) {
   MPI_Request requests[4] = {MPI_REQUEST_NULL, MPI_REQUEST_NULL,
@@ -148,14 +155,19 @@ int main(int argc, char **argv) {
 
     exchange_cuda(rank, size, p_d, jmaxLocal, imax);
 
-    launch_stencil_kernel(d_res, &res, eps, factor, imax, jmaxLocal, r, idx2,
-                          idy2, rhs_d, p_d, p_new_d, rank, size, blocksPerGrid,
-                          threadsPerBlock, compute_norm);
+    launch_stencil_kernel_rb(d_res, &res, eps, factor, imax, jmaxLocal, r, idx2,
+                             idy2, rhs_d, p_d, rank, size, blocksPerGrid,
+                             threadsPerBlock, compute_norm, 0); // red
 
-    double *temp = p_d;
-    p_d = p_new_d;
-    p_new_d = temp;
+    exchange_cuda(rank, size, p_d, jmaxLocal, imax);
+    launch_stencil_kernel_rb(d_res, &res, eps, factor, imax, jmaxLocal, r, idx2,
+                             idy2, rhs_d, p_d, rank, size, blocksPerGrid,
+                             threadsPerBlock, compute_norm, 1); // black
 
+    int boundary_blocks = (imax + 2 + threadsPerBlock - 1) / threadsPerBlock;
+
+    launch_boundary_kernel_rb(imax, jmaxLocal, p_d, rank, size, boundary_blocks,
+                              threadsPerBlock);
     if (compute_norm) {
       checkCudaError(
           cudaMemcpy(&res, d_res, sizeof(double), cudaMemcpyDeviceToHost));
