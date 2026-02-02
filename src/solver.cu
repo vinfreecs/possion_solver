@@ -21,6 +21,8 @@
 #define P_D(i, j) p_d[(j) * (imax + 2) + (i)]
 #define P_N_D(i, j) p_new_d[(j) * (imax + 2) + (i)]
 #define RHS_D(i, j) rhs_d[(j) * (imax + 2) + (i)]
+#define BLOCK_X 32
+#define BLOCK_Y 32
 
 
 static int sizeOfRank(int rank, int size, int N) {
@@ -133,7 +135,6 @@ void initSolver(int argc, char** argv, Solver* solver, Parameter* params, int pr
     solver->omega   = params->omg;
     solver->itermax = params->itermax;
     int imax      = solver->imax;
-    int jmax      = solver->jmax;
     int jmaxLocal = solver->jmaxLocal;
     double dx = solver->dx;
     double dy = solver->dy;
@@ -156,26 +157,18 @@ __global__
 void init_kernel(double* p_d, double* rhs_d, int imax, int jmaxLocal, double ys, double dx, double dy,  int problem) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
-    int stride_x = blockDim.x * gridDim.x;
-    int stride_y = blockDim.y * gridDim.y;
-    for (; j < jmaxLocal + 2; j+=stride_y) { // Can be done in GPU? Initialize Pressure field to (sin(4piπx) + sin(4piπy))
+    if (i >= 1 && i <= imax && j >= 1 && j <= jmaxLocal) { // Initialize Pressure field to (sin(4piπx) + sin(4piπy))
         double y = ys + j * dy;
-        for (; i < imax + 2; i+=stride_x) {
-            P_D(i, j) = sin(4.0 * PI * i * dx) + sin(4.0 * PI * y);
-        }
+        P_D(i, j) = sin(4.0 * PI * i * dx) + sin(4.0 * PI * y);
     }
 
     if (problem == 2) {// Offload to CUDA Kernel
-        for (; j < jmaxLocal + 2; j+=stride_y) { // Can be done in GPU? Initialize RHS_D to sin(2piπx)
-            for (; i < imax + 2; i+=stride_x) {
-                RHS_D(i, j) = sin(2.0 * PI * i * dx);
-            }
+        if (i >= 1 && i <= imax && j >= 1 && j <= jmaxLocal) {
+            RHS_D(i, j) = sin(2.0 * PI * i * dx);
         }
     } else {
-        for (; j < jmaxLocal + 2; j+=stride_y) { // Can be done in GPU directly? Initialize RHS_D to 0
-            for (; i < imax + 2; i+=stride_x) {
-                RHS_D(i, j) = 0.0;
-            }
+        if (i >= 1 && i <= imax && j >= 1 && j <= jmaxLocal) {
+            RHS_D(i, j) = 0.0;
         }
     }
 
@@ -187,23 +180,24 @@ void res_kernel(double* p_d, double* rhs_d, double* p_new_d, double* res_d,
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     
-    using BlockReduce = cub::BlockReduce<double, 256>;
+    using BlockReduce = cub::BlockReduce<double, BLOCK_X * BLOCK_Y>;
     __shared__ typename BlockReduce::TempStorage temp_storage;
     
-    double local_r_sq = 0.0;
+    double local_r = 0.0;
     
     if (i >= 1 && i <= imax && j >= 1 && j <= jmaxLocal) {
         double r = RHS_D(i, j) - ((P_D(i - 1, j) - 2.0 * P_D(i, j) + P_D(i + 1, j)) * idx2 +
                                    (P_D(i, j - 1) - 2.0 * P_D(i, j) + P_D(i, j + 1)) * idy2);
         P_N_D(i, j) = P_D(i, j) - (factor * r);
-        local_r_sq = r * r;
+        local_r = r * r;
     }
     
-    double aggregate = BlockReduce(temp_storage).Sum(local_r_sq);
-    
-    if (threadIdx.x == 0 && threadIdx.y == 0) {
+    double aggregate = BlockReduce(temp_storage).Sum(local_r);
+    int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    if (tid == 0) {
         atomicAdd(res_d, aggregate);
     }
+    
 }
 
 __global__
@@ -228,12 +222,38 @@ void outerBoundaryCopy(double* p_d, int imax, int jmaxLocal, int rank, int size)
     }
 }
 
+// __global__
+// void outerBoundaryCopy(double* p_d, int imax, int jmaxLocal, int rank, int size) {
+//     int i = blockIdx.x * blockDim.x + threadIdx.x;
+//     int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+//     if (i > imax + 1 || j > jmaxLocal + 1) return;
+
+//     // Left boundary
+//     if (i == 0 && j >= 1 && j <= jmaxLocal) {
+//         P_D(0, j) = P_D(1, j);
+//     }
+
+//     // Right boundary
+//     if (i == imax + 1 && j >= 1 && j <= jmaxLocal) {
+//         P_D(imax + 1, j) = P_D(imax, j);
+//     }
+
+//     // Bottom boundary (rank 0)
+//     if (rank == 0 && j == 0 && i >= 0 && i <= imax + 1) {
+//         P_D(i, 0) = P_D(i, 1);
+//     }
+
+//     // Top boundary (last rank)
+//     if (rank == size - 1 && j == jmaxLocal + 1 && i >= 0 && i <= imax + 1) {
+//         P_D(i, jmaxLocal + 1) = P_D(i, jmaxLocal);
+//     }
+// }
 
 int solve(Solver* solver) {
     int it = 0;
     double res, res_local;
     int imax      = solver->imax;
-    int jmax      = solver->jmax;
     int jmaxLocal = solver->jmaxLocal;
     double eps    = solver->eps;
     double omega  = solver->omega;
@@ -254,7 +274,7 @@ int solve(Solver* solver) {
     checkCudaError(cudaMalloc(&p_new_d , (imax + 2) * (jmaxLocal + 2) * sizeof(double)), false);
     
     // Grid should cover ghost cells too
-    dim3 block(32, 8);
+    dim3 block(32, 32);
     dim3 grid((imax + 2 + block.x - 1) / block.x, 
               (jmaxLocal + 2 + block.y - 1) / block.y);
     
@@ -285,7 +305,7 @@ int solve(Solver* solver) {
         MPI_Allreduce(&res_local, &res, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         
         // Normalize by total number of interior points
-        res = sqrt(res / (double)(imax * jmax));
+        res = sqrt(res / (double)(imax * jmaxLocal));
         
         if (rank == 0 && (it % 100 == 0 || it < 10)) {
             printf("Iteration %d: Residuum = %e\n", it, res);
@@ -304,13 +324,11 @@ int solve(Solver* solver) {
 }
 
 int solveRB(Solver* solver) {
-    double r;
     int it = 0;
-    double res_d, res1;
 
     int imax      = solver->imax;
-    int jmax      = solver->jmax;
     int jmaxLocal = solver->jmaxLocal;
+    int jmax = solver->jmax;
     double eps    = solver->eps;
     double omega  = solver->omega;
     int itermax   = solver->itermax;
@@ -320,38 +338,92 @@ int solveRB(Solver* solver) {
     double idx2   = 1.0 / dx2;
     double idy2   = 1.0 / dy2;
     double factor = omega * 0.5 * (dx2 * dy2) / (dx2 + dy2);
-    double* p     = solver->p;
-    double* rhs   = solver->rhs;
-    int jsw, isw;
+
+    double* p_d     = solver->p_d;
+    double* rhs_d   = solver->rhs_d;
+    
     double epssq = eps * eps;
 
-    dim3 block(32, 8);
+    double res_red, res_black;
+    
+    double *res_d_red, *res_d_black;
+    cudaMalloc(&res_d_red, sizeof(double));
+    cudaMalloc(&res_d_black, sizeof(double));
+    cudaMemset(res_d_red, 0, sizeof(double));   
+    cudaMemset(res_d_black, 0, sizeof(double)); 
+    
+    dim3 block(32, 32);
     dim3 grid((imax + block.x -1)/block.x, (jmaxLocal + block.y -1)/block.y);
-    cudaMemset(&res_d, eps+1, sizeof(double));
-    while ((res_d >= epssq) && (it < itermax)) {
-        // res = 0.0;
-        jsw = 1;
+    double res = eps + 1;
+    while ((res >= epssq) && (it < itermax)) {
+        res=0.0;
+        cudaMemset(res_d_red, 0, sizeof(double));   
+        cudaMemset(res_d_black, 0, sizeof(double)); 
+        cudaDeviceSynchronize();
 
-        // res_kernel<<<grid, block>>>(solver, factor, res_d);
+        exchange(solver);
+        cudaDeviceSynchronize();
 
-        MPI_Allreduce(&res_d, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        res_d = res1;
-        res_d = res1 / (double)(imax * jmax);
+        gaussSeidelKernel<<<grid, block>>>(p_d, rhs_d, res_d_red, idx2, idy2,factor, imax, jmaxLocal, true);
+        checkCudaError(cudaDeviceSynchronize(), true);
+        checkCudaError( cudaMemcpy(&res_red, res_d_red, sizeof(double), cudaMemcpyDeviceToHost), false);
+
+        MPI_Allreduce(MPI_IN_PLACE, &res_red, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        exchange(solver);
+        cudaDeviceSynchronize();        cudaDeviceSynchronize();
+
+        gaussSeidelKernel<<<grid, block>>>(p_d, rhs_d, res_d_black, idx2, idy2, factor, imax, jmaxLocal, false);
+        checkCudaError(cudaDeviceSynchronize(), true);
+
+        checkCudaError( cudaMemcpy(&res_black, res_d_black, sizeof(double), cudaMemcpyDeviceToHost), false);
+
+        cudaDeviceSynchronize();
+        MPI_Allreduce(MPI_IN_PLACE, &res_black, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        
+        // Normalize by total number of interior points
+        res = sqrt((res_red + res_black) / (double)(imax * jmax));
+        
+        if (solver->rank == 0 && (it % 100 == 0 || it < 10)) {
+            printf("Iteration %d: Residuum = %e\n", it, res);
+        }
+
 #ifdef DEBUG
         printf("%d Residuum: %e\n", it, res_d);
 #endif
         it++;
     }
+    if (solver->rank == 0) printf("Solver took %d iterations to reach %f using omega=%f\n", it, sqrt(res), solver->omega);
+    // return it;
+    return (res < eps) ? 1 : 0;
 
-    if (solver->rank == 0) {
-        printf("Solver took %d iterations\n", it);
-    }
-    if (res1 < eps) {
-        return 1;
-    } else {
-        return 0;
-    }
 }
+
+__global__
+void gaussSeidelKernel(double* p_d, double* rhs_d, double* res_d, double idx2, double idy2, double factor, int imax, int jmaxLocal, bool is_red) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x ;
+    int j = blockIdx.y * blockDim.y + threadIdx.y ;
+    double local_r;
+    if (i >= imax - 1 || j >= jmaxLocal - 1) {
+        local_r = 0.0;   
+    }
+    int color = is_red ? 0 : 1;
+    local_r = 0.0;
+
+    using BlockReduce = cub::BlockReduce<double, BLOCK_X * BLOCK_Y>;
+    __shared__ typename BlockReduce::TempStorage temp_storage;
+    if ((i + j) % 2 == color) {    
+        double r = RHS_D(i, j) - ((P_D(i - 1, j) - 2.0 * P_D(i, j) + P_D(i + 1, j)) * idx2 +
+                                    (P_D(i, j - 1) - 2.0 * P_D(i, j) + P_D(i, j + 1)) * idy2);
+            P_D(i, j) = P_D(i, j) - (factor * r);
+            local_r = r * r;
+    }
+    double aggregate = BlockReduce(temp_storage).Sum(local_r);
+    if (threadIdx.y * blockDim.x + threadIdx.x == 0) {
+        atomicAdd(res_d, aggregate);
+    }
+    
+}
+
 
 // int solveRBA(Solver* solver) {
 //     double r;
@@ -486,9 +558,7 @@ void writeResult(Solver* solver, double* m, char* filename) {
 void finalize(Solver* solver) {
     MPI_Finalize();
 
-    // checkCudaError(cudaFreeHost(solver->p), true);
-    // checkCudaError(cudaFreeHost(solver->rhs), true);
-
     checkCudaError(cudaFree(solver->p_d), true);
     checkCudaError(cudaFree(solver->rhs_d), true);
+
 }

@@ -5,3 +5,7 @@ exe-NVCC
 p.dat
 p.png
 run.sh
+init.dat
+init.png
+result.dat
+init.png

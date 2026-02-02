@@ -30,7 +30,8 @@ int main(int argc, char** argv) {
 
     initSolver(argc, argv, &solver, &params, 2);
     if (solver.rank == 0) printParameter(&params);
-    solve(&solver);
+    // solve(&solver);
+    solveRB(&solver);
     getResult(&solver, "result.dat");
     finalize(&solver);
     return EXIT_SUCCESS; 
