@@ -111,17 +111,11 @@ int main(int argc, char **argv) {
   checkCudaError(
       cudaMemcpy(rhs_d, solver.rhs, size_rhs, cudaMemcpyHostToDevice));
   int threadsPerBlock = 256;
-  // TODO
-  //  int blocksPerGrid = (num_devices + threadsPerBlock - 1) / threadsPerBlock;
   int blocksPerGrid =
       (solver.jmaxLocal + threadsPerBlock - 1) / threadsPerBlock;
-  // CUDA
-
-  // solve(&solver);
-
-  // CUDA
   double *d_res;
   checkCudaError(cudaMalloc((void **)&d_res, sizeof(double)));
+
   double r;
   int it = 0;
   double res, res1;
@@ -156,7 +150,8 @@ int main(int argc, char **argv) {
     bool compute_norm = (it % 1000 == 0);
 
     if (compute_norm)
-      checkCudaError(cudaMemset(d_res, 0, sizeof(double)));
+      checkCudaError(
+          cudaMemsetAsync(d_res, 0, sizeof(double), stream_boundary));
 
     launch_stencil_kernel(d_res, &res, eps, factor, imax, 1, 1, r, idx2, idy2,
                           rhs_d, p_d, p_new_d, rank, size, blocksPerGrid,
@@ -187,8 +182,8 @@ int main(int argc, char **argv) {
     p_new_d = temp;
 
     if (compute_norm) {
-      checkCudaError(
-          cudaMemcpy(&res, d_res, sizeof(double), cudaMemcpyDeviceToHost));
+      checkCudaError(cudaMemcpyAsync(&res, d_res, sizeof(double),
+                                     cudaMemcpyDeviceToHost, stream_boundary));
       MPI_Allreduce(&res, &res1, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
       res = res1;
       res = sqrt(res / (imax * jmax));
@@ -212,7 +207,7 @@ int main(int argc, char **argv) {
 
   if (rank == 0) {
     double time_taken = stop_time - start_time;
-    printf("Solver took %d iterations\n and residual is %f", it, res);
+    printf("Solver took %d iterations\n and residual is %f \n", it, res);
     printf("Time taken is %f \n", time_taken);
     double perf = (double)it * (double)imax * (double)jmax / (time_taken * 1e6);
     printf("The performance %f in MLUP/s \n", perf);
