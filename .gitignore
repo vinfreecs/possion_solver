@@ -9,3 +9,5 @@ init.dat
 init.png
 result.dat
 init.png
+*.nsys-rep
+log*

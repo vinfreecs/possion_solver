@@ -7,9 +7,14 @@
 #ifndef __SOLVER_H_
 #define __SOLVER_H_
 #include "parameter.h"
-#include "cuda-util.h"
-#include "cuda_runtime.h"
 #include "util.h"
+
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "allocate.h"
+#include "parameter.h"
 
 typedef struct {
     double dx, dy;

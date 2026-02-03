@@ -29,10 +29,12 @@ int main(int argc, char** argv) {
     readParameter(&params, argv[1]);
 
     initSolver(argc, argv, &solver, &params, 2);
+    // getResult(&solver, "init.dat");
+
     if (solver.rank == 0) printParameter(&params);
     // solve(&solver);
     solveRB(&solver);
-    getResult(&solver, "result.dat");
+    // getResult(&solver, "result.dat");
     finalize(&solver);
     return EXIT_SUCCESS; 
 }
